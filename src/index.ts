@@ -1,7 +1,7 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { callPortal, hasWalletKey, PortalError, type PortalOperation } from "./pocket.js";
-import { requestTimeoutMs } from "./util.js";
+import { clientHeaders, requestTimeoutMs } from "./util.js";
 
 export { resetSessionBudget, sessionSpentAtomic, PortalError } from "./pocket.js";
 
@@ -42,7 +42,7 @@ export async function freeSearch(query: string, maxResults?: number, f: typeof f
   if (maxResults !== undefined) body.max_results = maxResults;
   const res = await f(`${FREE_RELAY_URL}/v1/search`, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
+    headers: { "content-type": "application/json", accept: "application/json", ...clientHeaders() },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(requestTimeoutMs()),
   });
@@ -56,6 +56,26 @@ async function paid(op: PortalOperation, body: Record<string, unknown>): Promise
   const r = await callPortal(op, body);
   const env = r.response as { data?: unknown } | null;
   return { ...((stripProvider(env?.data ?? env) as object) ?? {}), payment: r.payment };
+}
+
+/** Characters of page text (markdown/text/content fields, any depth; ignores payment). */
+export function textLength(v: unknown): number {
+  if (Array.isArray(v)) return v.reduce((n, x) => n + textLength(x), 0);
+  if (v && typeof v === "object") {
+    let n = 0;
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      if (k === "payment") continue;
+      n += (k === "markdown" || k === "text" || k === "content") && typeof x === "string" ? x.length : textLength(x);
+    }
+    return n;
+  }
+  return 0;
+}
+export const THIN_CHARS = 200;
+
+function fallbackEnabled(flag?: boolean): boolean {
+  if (flag !== undefined) return flag;
+  return (typeof process !== "undefined" ? process.env.AGENTSEARCH_EXTRACT_RENDER_FALLBACK ?? "" : "").trim() === "1";
 }
 
 function usePaid(mode: AgentSearchOptions["mode"] = "auto"): boolean {
@@ -95,21 +115,33 @@ function requireWallet(name: string) {
 
 export function AgentSearchExtractTool() {
   return tool(
-    async ({ url, formats, max_chars }) => {
+    async ({ url, formats, max_chars, render_fallback }) => {
       try {
         requireWallet("agentsearch_extract");
-        return out(await paid("extract", { url, ...(formats ? { formats } : {}), ...(max_chars ? { max_chars } : {}) }));
+        const ex = (await paid("extract", { url, ...(formats ? { formats } : {}), ...(max_chars ? { max_chars } : {}) })) as Record<string, unknown>;
+        if (!fallbackEnabled(render_fallback) || textLength(ex) >= THIN_CHARS) return out(ex);
+        const rf = (formats ?? ["markdown"]).filter((f) => ["markdown", "text", "html", "links"].includes(f));
+        try {
+          const r = (await paid("render", { url, formats: rf.length ? rf : ["markdown"], ...(max_chars ? { max_chars } : {}) })) as Record<string, unknown>;
+          return out({ ...r, render_fallback: { used: true, reason: `extract returned under ${THIN_CHARS} chars`, extract_payment: ex.payment } });
+        } catch (e) {
+          return out({ ...ex, render_fallback: { used: false, error: errText(e) } });
+        }
       } catch (e) {
         return `Error: ${errText(e)}`;
       }
     },
     {
       name: "agentsearch_extract",
-      description: "Fetch a URL and return its main content as clean text/markdown. Paid: $0.005 per call (needs a wallet).",
+      description:
+        "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. " +
+        "If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, " +
+        "or pass render_fallback=true to do that automatically (a second $0.005 call). Paid: $0.005 per call (needs a wallet).",
       schema: z.object({
         url: z.string().url().describe("http(s) URL to extract"),
         formats: z.array(z.string()).optional().describe("e.g. [\"markdown\"]"),
         max_chars: z.number().int().positive().optional(),
+        render_fallback: z.boolean().optional().describe("If extract returns thin content, retry with render (extra $0.005)"),
       }),
     }
   );
@@ -129,7 +161,7 @@ export function AgentSearchRenderTool() {
     {
       name: "agentsearch_render",
       description:
-        "Render a JavaScript-heavy page in a headless browser and return markdown/text/html/links (optional screenshot). Paid: $0.005 per call (needs a wallet).",
+        "Render a page in a real headless browser and return markdown/text/html/links (optional screenshot). Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, content loaded by scripts). Paid: $0.005 per call (needs a wallet).",
       schema: z.object({
         url: z.string().url(),
         formats: z.array(z.enum(["markdown", "text", "html", "links"])).optional(),

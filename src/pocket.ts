@@ -13,7 +13,7 @@ import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { decodePaymentResponseHeader } from "@x402/core/http";
 import { registerExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
-import { isSecureOrLocalUrl, requestTimeoutMs } from "./util.js";
+import { isSecureOrLocalUrl, requestTimeoutMs, clientHeaders } from "./util.js";
 
 export const DEFAULT_PORTAL_URL = "https://agent.pocket.network";
 /** Base mainnet, CAIP-2. */
@@ -175,7 +175,7 @@ interface RawResponse {
 async function post(url: string, body: unknown, extraHeaders: Record<string, string>): Promise<RawResponse> {
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json", ...extraHeaders },
+    headers: { "content-type": "application/json", accept: "application/json", ...clientHeaders(), ...extraHeaders },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(requestTimeoutMs()),
   });

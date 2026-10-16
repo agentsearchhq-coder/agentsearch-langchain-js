@@ -1,6 +1,6 @@
 {
   "name": "@agentsearchhq/langchain",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "LangChain.js tools for AgentSearch: free live web search, plus pay-per-call extract and JS render ($0.005 USDC on Base via x402)",
   "type": "module",
   "main": "dist/index.js",
@@ -52,5 +52,12 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/agentsearchhq-coder/agentsearch-langchain-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/agentsearchhq-coder/agentsearch-langchain-js/issues"
   }
 }

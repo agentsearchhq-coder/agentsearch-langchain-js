@@ -12,3 +12,16 @@ export function isSecureOrLocalUrl(raw: string): boolean {
   const h = u.hostname.toLowerCase();
   return LOOPBACK.has(h) || h.endsWith(".localhost") || /^127\.\d+\.\d+\.\d+$/.test(h);
 }
+
+export const PACKAGE_NAME = "@agentsearchhq/langchain";
+export const PACKAGE_VERSION = "0.2.0";
+
+/** Anonymous package tag (name/version only) so AgentSearch can count usage per integration.
+ *  Opt out with AGENTSEARCH_NO_CLIENT_TAG=1. AGENTSEARCH_SELF=1 marks our own test traffic. */
+export function clientHeaders(): Record<string, string> {
+  const env = (typeof process !== "undefined" ? process.env : {}) as Record<string, string | undefined>;
+  const h: Record<string, string> = {};
+  if ((env.AGENTSEARCH_NO_CLIENT_TAG ?? "").trim() !== "1") h["X-Agent-Client"] = `${PACKAGE_NAME}/${PACKAGE_VERSION}`;
+  if ((env.AGENTSEARCH_SELF ?? "").trim() === "1") h["X-AgentSearch-Self"] = "1";
+  return h;
+}
