@@ -78,3 +78,42 @@ test("LIVE: fake-model agent does one real free search", { skip: !process.env.AG
   const ans = await runAgent(new FakeToolModel({}), [AgentSearchTool()], "LangChain JS tools");
   assert.match(ans, /"url":"https?:\/\//);
 });
+
+test("wallet key alone never switches search to paid; schema hides mode", async () => {
+  process.env.AGENTSEARCH_WALLET_PRIVATE_KEY = "0x" + "11".repeat(32);
+  try {
+    const { resolveSearchMode } = await import("../dist/index.js");
+    assert.equal(resolveSearchMode(), "free");
+    assert.equal(resolveSearchMode("auto"), "paid");
+    assert.equal(resolveSearchMode("paid"), "paid");
+    const t = AgentSearchTool({ fetch: fakeFetch(200, { results: [] }) });
+    await t.invoke({ query: "x" });
+    assert.equal(fakeFetch.last.url, "https://relay.agentsearchhq.com/v1/search");
+    process.env.AGENTSEARCH_MODE = "free";
+    assert.equal(resolveSearchMode("paid"), "free");
+  } finally {
+    delete process.env.AGENTSEARCH_WALLET_PRIVATE_KEY; delete process.env.AGENTSEARCH_MODE;
+  }
+  const { resolveSearchMode } = await import("../dist/index.js");
+  assert.equal(resolveSearchMode("paid"), "free"); // no key -> free fallback
+  for (const t of agentSearchTools()) {
+    const keys = Object.keys(t.schema.shape);
+    assert.ok(!keys.includes("mode"), t.name);
+  }
+  assert.throws(() => AgentSearchTool({ mode: "bogus" }));
+});
+
+test("wording: per IP, no unlimited, no render price; extract formats enum", async () => {
+  const fs = await import("node:fs");
+  const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  const { PAID_ONLY_MESSAGE } = await import("../dist/index.js");
+  assert.match(FREE_LIMIT_MESSAGE, /per IP.*shared daily capacity/);
+  for (const s of [FREE_LIMIT_MESSAGE, readme]) assert.doesNotMatch(s, /unlimited|per user/i);
+  assert.doesNotMatch(PAID_ONLY_MESSAGE("agentsearch_render"), /\$/);
+  const [, ex, rd] = agentSearchTools();
+  assert.doesNotMatch(rd.description, /\$/);
+  assert.doesNotMatch(ex.schema.shape.render_fallback.description, /\$/);
+  assert.doesNotMatch(readme, /agentsearch_render`[^\n]*\$0/);
+  assert.ok(ex.schema.safeParse({ url: "https://a.b", formats: ["markdown"] }).success);
+  assert.ok(!ex.schema.safeParse({ url: "https://a.b", formats: ["pdf"] }).success);
+});

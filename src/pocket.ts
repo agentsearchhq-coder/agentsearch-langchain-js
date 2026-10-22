@@ -7,7 +7,7 @@
  * signing -> retry once with PAYMENT-SIGNATURE -> 200 with the portal envelope
  * {portal, data} and the receipt in PAYMENT-RESPONSE.
  *
- * The private key is read from env, used only to sign, and never logged or returned.
+ * The private key is read from env and used only to sign; it is not included in tool output or errors.
  */
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { decodePaymentResponseHeader } from "@x402/core/http";
@@ -39,12 +39,11 @@ export const PORTAL_SERVICES: Record<PortalOperation, { serviceId: string; path:
 export const KEY_ENV_VARS = ["AGENTSEARCH_WALLET_PRIVATE_KEY", "POCKET_PRIVATE_KEY"] as const;
 
 export const SETUP_MESSAGE = [
-  "agentsearch_web_search, agentsearch_extract and agentsearch_render are not configured yet.",
-  "Option 1 (pay per call, no account): set AGENTSEARCH_WALLET_PRIVATE_KEY (or POCKET_PRIVATE_KEY) to the 64-hex private key of a NEW wallet made only for this, in the env block of this MCP server in your client config, then restart the client.",
-  "Fund that wallet with a little USDC on Base (for example $1; each call costs $0.005 = 5000 atomic units). No ETH is needed: the x402 facilitator pays gas.",
-  "Calls are paid through the Pocket Network Agentic Portal (https://agent.pocket.network) over x402. Spending is limited to $0.005 per call and to AGENTSEARCH_MAX_TOTAL_ATOMIC per session (default 1000000 = $1.00).",
-  "Option 2 (self-hosted): set AGENTSEARCH_BASE_URL to your own AgentSearch-compatible API.",
-  "The review tools (agentsearch_review_lookup, agentsearch_review_submit) work without either.",
+  "This AgentSearch paid tool (agentsearch_search in paid mode, agentsearch_extract or agentsearch_render) needs a wallet.",
+  "Set AGENTSEARCH_WALLET_PRIVATE_KEY (or POCKET_PRIVATE_KEY) in the environment of the Node.js process running your LangChain agent to the 64-hex private key of a NEW wallet made only for this.",
+  "Fund that wallet with a little USDC on Base (for example $1). No ETH is needed: the x402 facilitator pays gas.",
+  "Calls are paid through the Pocket Network Agentic Portal (https://agent.pocket.network) over x402, capped per call (AGENTSEARCH_MAX_PER_CALL_ATOMIC) and per process (AGENTSEARCH_MAX_TOTAL_ATOMIC, default 1000000 = $1.00).",
+  "Search is free by default; paid search is opt-in with AgentSearchTool({ mode: \"paid\" }) or AGENTSEARCH_MODE=paid. Pricing: https://agentsearchhq.com/pricing",
 ].join(" ");
 
 export class PortalError extends Error {

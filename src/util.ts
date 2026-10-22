@@ -14,7 +14,7 @@ export function isSecureOrLocalUrl(raw: string): boolean {
 }
 
 export const PACKAGE_NAME = "@agentsearchhq/langchain";
-export const PACKAGE_VERSION = "0.2.0";
+export const PACKAGE_VERSION = "0.2.1";
 
 /** Anonymous package tag (name/version only) so AgentSearch can count usage per integration.
  *  Opt out with AGENTSEARCH_NO_CLIENT_TAG=1. AGENTSEARCH_SELF=1 marks our own test traffic. */
