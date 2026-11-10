@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 (2026-11-10)
+- **Search + Read in one paid call.** New `AgentSearchSearchAndReadTool` (`agentsearch_search_and_read`) posts to `https://api.agentsearchhq.com/x402/v1/search_and_read` at **$0.015**, charged only when at least one page returns text. Default 3 results (max 5), default 8000 characters per page (max 20000); `render_fallback=true` renders at most one thin page in the same call. About 48% less than a $0.008 search plus three $0.007 extracts ($0.029), and one payment instead of four.
+- Direct-only: not on the Pocket route. A Pocket or no-wallet call refuses with nothing signed. Search itself stays free by default.
+- Direct per-call ceiling raised to **$0.020** (`DIRECT_MAX_PER_CALL_ATOMIC = 20000`) so a $0.015 search-and-read can settle. An old `10000` cap now refuses with a hint to raise it to `20000`. Matches `@agentsearchhq/agentsearch-mcp` 1.7.0.
+
 ## 0.3.0 (2026-11-09)
 
 ### Changed: paid calls go directly to AgentSearch's x402 API by default

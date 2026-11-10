@@ -7,6 +7,7 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 | `AgentSearchTool` | `agentsearch_search` | **Free** by default (up to 25 searches/day per IP, subject to shared daily capacity; up to 5 results; no key). Paid search only when you opt in (`mode: "paid"` or `AGENTSEARCH_MODE=paid`), $0.005/call. |
 | `AgentSearchExtractTool` | `agentsearch_extract` | $0.007/call (USDC on Base via x402, paid directly to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Paid, headless browser for JS pages ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)) |
+| `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | Paid, search + top page text in one call, $0.015 (direct x402 only; charged only when at least one page returns text) |
 
 ## Install
 
@@ -54,9 +55,9 @@ AgentSearchTool({ mode: "paid" });       // or agentSearchTools({ mode: "paid" }
 
 `agentsearch_extract` accepts `formats` (`markdown`, `text`, `html`, `links`), `max_chars` and `render_fallback`. `agentsearch_render` accepts the same `formats` plus `screenshot`, `wait_until`, `wait_for_selector` and `wait_ms`.
 
-## Paid mode (extract, render, opt-in paid search)
+## Paid mode (extract, render, search-and-read, opt-in paid search)
 
-Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Since 0.3.0 calls are paid per request over x402 **directly to AgentSearch's own API** (`https://api.agentsearchhq.com`, USDC on Base, settled only on success): search $0.008, extract $0.007; see [pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package) for render. $1 covers about 140 extracts. Prefer the Pocket Network Agentic Portal ($0.005 per call)? Set `AGENTSEARCH_PAYMENT_ROUTE=pocket`. On the direct route extract and render take only `url`; options like `formats`, `max_chars` or screenshots need the Pocket route (dropped options are listed in `payment.droppedFields`). Extract and render use the key directly; search stays free unless you opt in as above.
+Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Since 0.3.0 calls are paid per request over x402 **directly to AgentSearch's own API** (`https://api.agentsearchhq.com`, USDC on Base, settled only on success): search $0.008, extract $0.007, search-and-read $0.015; see [pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package) for render. $1 covers about 140 extracts or 66 search-and-read calls. Prefer the Pocket Network Agentic Portal ($0.005 per call)? Set `AGENTSEARCH_PAYMENT_ROUTE=pocket`. On the direct route extract and render take only `url`; options like `formats`, `max_chars` or screenshots need the Pocket route (dropped options are listed in `payment.droppedFields`). Extract and render use the key directly; search stays free unless you opt in as above.
 
 **Render fallback:** when extract returns thin content (under 200 characters, e.g. a JavaScript-heavy page), pass `render_fallback: true` to the extract call, or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`, to retry automatically with render. That is a second paid call ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)); the result includes a `render_fallback` object.
 
@@ -66,7 +67,7 @@ Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by 
 | `AGENTSEARCH_MODE` | unset (`free`, `paid` or `auto`; overrides `mode`) |
 | `AGENTSEARCH_MAX_TOTAL_ATOMIC` | `1000000` ($1.00 per process) |
 | `AGENTSEARCH_PAYMENT_ROUTE` | `direct` (AgentSearch's x402 API); `pocket` = Pocket Network Agentic Portal at $0.005/call |
-| `AGENTSEARCH_MAX_PER_CALL_ATOMIC` | `10000` on the direct route, `5000` on Pocket (can only be lowered) |
+| `AGENTSEARCH_MAX_PER_CALL_ATOMIC` | `20000` on the direct route, `5000` on Pocket (can only be lowered) |
 | `AGENTSEARCH_EXTRACT_RENDER_FALLBACK` | unset (`1` = extract retries thin pages with render) |
 | `AGENTSEARCH_TIMEOUT_MS` | `30000` |
 | `AGENTSEARCH_NO_CLIENT_TAG` | unset (`1` = don't send the anonymous `X-Agent-Client: @agentsearchhq/langchain/<version>` header) |

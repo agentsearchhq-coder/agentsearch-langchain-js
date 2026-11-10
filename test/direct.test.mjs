@@ -2,13 +2,13 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { generatePrivateKey } from "viem/accounts";
-import { AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool, resetSessionBudget, paymentRoute } from "../dist/index.js";
+import { AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchSearchAndReadTool, resetSessionBudget, paymentRoute } from "../dist/index.js";
 
 const API = "https://api.agentsearchhq.com";
 const LEDGER = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337";
 const POCKET_PAYEE = "0xF732ea490c5766071785a2310523f7fA2CEbB829";
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const PRICES = { search: "8000", extract: "7000", render: "10000" };
+const PRICES = { search: "8000", extract: "7000", render: "10000", search_and_read: "15000" };
 const realFetch = globalThis.fetch;
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
 
@@ -48,11 +48,11 @@ test("route: direct by default; pocket selectable; legacy switch; invalid throws
   process.env.AGENTSEARCH_PAYMENT_ROUTE = "bogus"; assert.throws(() => paymentRoute(), /must be 'direct'/);
 });
 
-for (const op of ["search", "extract", "render"]) {
+for (const op of ["search", "extract", "render", "search_and_read"]) {
   test(`default ${op} signs ${PRICES[op]} to AgentSearch's payee on the direct API`, async () => {
     const seen = mockApi(op);
-    const t = op === "search" ? AgentSearchTool({ mode: "paid" }) : op === "extract" ? AgentSearchExtractTool() : AgentSearchRenderTool();
-    const arg = op === "search" ? { query: "q", max_results: 3 } : { url: "https://example.com", formats: ["markdown"] };
+    const t = op === "search" ? AgentSearchTool({ mode: "paid" }) : op === "extract" ? AgentSearchExtractTool() : op === "search_and_read" ? AgentSearchSearchAndReadTool() : AgentSearchRenderTool();
+    const arg = op === "search" ? { query: "q", max_results: 3 } : op === "search_and_read" ? { query: "q", num_results: 3 } : { url: "https://example.com", formats: ["markdown"] };
     const out = JSON.parse(await t.invoke(arg));
     assert.equal(seen.calls[0].url, `${API}/x402/v1/${op}`);
     const a = seen.signed.payload.authorization;
@@ -61,7 +61,8 @@ for (const op of ["search", "extract", "render"]) {
     assert.equal(out.payment.payTo, LEDGER);
     assert.equal(out.payment.rail, "agentsearch-x402-direct");
     assert.equal(out.payment.settled, true);
-    if (op !== "search") assert.deepEqual(Object.keys(seen.calls[1].body), ["url"]);
+    if (op === "extract" || op === "render") assert.deepEqual(Object.keys(seen.calls[1].body), ["url"]);
+    if (op === "search_and_read") assert.equal(seen.calls[1].body.num_results, 3);
   });
 }
 
@@ -86,7 +87,7 @@ test("old $0.005 per-call cap gets a hint, nothing signed", async () => {
   assert.ok(seen.calls.every((c) => !c.sig));
 });
 
-for (const over of [{ payTo: POCKET_PAYEE }, { amount: "10001" }, { network: "eip155:84532" }, { asset: "0x" + "11".repeat(20) }]) {
+for (const over of [{ payTo: POCKET_PAYEE }, { amount: "20001" }, { network: "eip155:84532" }, { asset: "0x" + "11".repeat(20) }]) {
   test(`refuses bad direct terms ${JSON.stringify(over)}`, async () => {
     const seen = mockApi("extract", over);
     assert.match(await AgentSearchExtractTool().invoke({ url: "https://example.com" }), /Nothing was signed/);
@@ -107,4 +108,24 @@ test("e2e against local mock direct API", { skip: !MOCK }, async () => {
   const r = JSON.parse(await AgentSearchRenderTool().invoke({ url: "https://example.com" }));
   assert.deepEqual([s, e, r].map((x) => x.payment.amountAtomic), ["8000", "7000", "10000"]);
   assert.ok([s, e, r].every((x) => x.payment.settled));
+});
+
+test("search_and_read is direct-only", async () => {
+  process.env.AGENTSEARCH_PAYMENT_ROUTE = "pocket";
+  globalThis.fetch = async () => { throw new Error("no network expected"); };
+  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "q" }), /own x402 API/);
+});
+
+test("search_and_read with a $0.010 cap refuses and hints 20000", async () => {
+  process.env.AGENTSEARCH_MAX_PER_CALL_ATOMIC = "10000";
+  const seen = mockApi("search_and_read");
+  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "q" }), /to 20000/);
+  assert.ok(seen.calls.every((c) => !c.sig));
+});
+
+test("search_and_read with no wallet does not hit the free relay", async () => {
+  delete process.env.AGENTSEARCH_WALLET_PRIVATE_KEY;
+  delete process.env.POCKET_PRIVATE_KEY;
+  globalThis.fetch = async () => { throw new Error("no network expected"); };
+  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "q" }), /No wallet is configured|needs a wallet/i);
 });

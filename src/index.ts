@@ -200,6 +200,37 @@ export function AgentSearchRenderTool() {
   );
 }
 
+
+export function AgentSearchSearchAndReadTool() {
+  return tool(
+    async ({ query, num_results, max_chars, render_fallback }) => {
+      try {
+        requireWallet("agentsearch_search_and_read");
+        const body: Record<string, unknown> = { query };
+        if (num_results !== undefined) body.num_results = num_results;
+        if (max_chars !== undefined) body.max_chars = max_chars;
+        if (render_fallback !== undefined) body.render_fallback = render_fallback;
+        return out(await paid("search_and_read", body));
+      } catch (e) {
+        return `Error: ${errText(e)}`;
+      }
+    },
+    {
+      name: "agentsearch_search_and_read",
+      description:
+        "Search the live web and return the top results with each page's main text in one paid call ($0.015 USDC on Base, charged only when at least one page returns text). " +
+        "Cheaper than a $0.008 search plus three $0.007 extracts ($0.029) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). " +
+        "Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only — not available on Pocket. Search itself stays free by default.",
+      schema: z.object({
+        query: z.string().min(1).describe("Search query"),
+        num_results: z.number().int().min(1).max(5).optional().describe("How many top results to read, default 3, max 5"),
+        max_chars: z.number().int().positive().max(20000).optional().describe("Max characters of page text per result, default 8000, max 20000"),
+        render_fallback: z.boolean().optional().describe("If extract is thin, render at most one page in the same $0.015 call"),
+      }),
+    }
+  );
+}
+
 export function agentSearchTools(opts: AgentSearchOptions = {}) {
-  return [AgentSearchTool(opts), AgentSearchExtractTool(), AgentSearchRenderTool()];
+  return [AgentSearchTool(opts), AgentSearchExtractTool(), AgentSearchRenderTool(), AgentSearchSearchAndReadTool()];
 }

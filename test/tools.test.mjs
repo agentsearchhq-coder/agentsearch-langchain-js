@@ -38,7 +38,7 @@ async function runAgent(model, tools, question) {
 
 test("tool metadata and schemas", () => {
   const names = agentSearchTools().map((t) => t.name);
-  assert.deepEqual(names, ["agentsearch_search", "agentsearch_extract", "agentsearch_render"]);
+  assert.deepEqual(names, ["agentsearch_search", "agentsearch_extract", "agentsearch_render", "agentsearch_search_and_read"]);
 });
 
 test("free search via relay (mocked) and provider stripped", async () => {
