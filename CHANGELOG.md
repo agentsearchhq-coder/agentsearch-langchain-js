@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 (2026-11-10)
+- Input checks before any request: an empty/whitespace-only `query`, or a missing/invalid URL (not http/https, no host, embedded credentials, localhost, private/loopback/link-local IPs, single-label or `.local`/`.internal` hosts) returns an `Error: ...` string with no HTTP call and nothing signed. Previously some of these failed schema parsing and threw. Queries and URLs are trimmed; queries are capped at 400 chars.
+- `max_results`/`num_results` accept `null` (= default) and out-of-range values are clamped to 1-5.
+- README and tool descriptions: paid search $0.008 (was shown as $0.005). Client tag now reports the real version.
+
 ## 0.4.0 (2026-11-10)
 - **Search + Read in one paid call.** New `AgentSearchSearchAndReadTool` (`agentsearch_search_and_read`) posts to `https://api.agentsearchhq.com/x402/v1/search_and_read` at **$0.015**, charged only when at least one page returns text. Default 3 results (max 5), default 8000 characters per page (max 20000); `render_fallback=true` renders at most one thin page in the same call. About 48% less than a $0.008 search plus three $0.007 extracts ($0.029), and one payment instead of four.
 - Direct-only: not on the Pocket route. A Pocket or no-wallet call refuses with nothing signed. Search itself stays free by default.

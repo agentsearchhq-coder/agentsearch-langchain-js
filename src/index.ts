@@ -2,6 +2,9 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { callPortal, hasWalletKey, PortalError, type PortalOperation } from "./pocket.js";
 import { clientHeaders, requestTimeoutMs } from "./util.js";
+import { checkCount, checkQuery, checkUrl } from "./validate.js";
+
+export { checkQuery, checkUrl, checkCount, InvalidInputError } from "./validate.js";
 
 export { resetSessionBudget, sessionSpentAtomic, PortalError, paymentRoute } from "./pocket.js";
 
@@ -113,8 +116,10 @@ export function AgentSearchTool(opts: AgentSearchOptions = {}) {
   if (opts.mode !== undefined && !(SEARCH_MODES as readonly string[]).includes(opts.mode))
     throw new AgentSearchError(`mode must be 'free', 'paid' or 'auto' (got ${JSON.stringify(opts.mode)})`);
   return tool(
-    async ({ query, max_results }) => {
+    async (args) => {
       try {
+        const query = checkQuery(args.query);
+        const max_results = checkCount(args.max_results, "max_results");
         if (resolveSearchMode(opts.mode) === "paid") return out(await paid("search", { query, ...(max_results ? { max_results } : {}) }));
         return out(await freeSearch(query, max_results, opts.fetch));
       } catch (e) {
@@ -125,10 +130,10 @@ export function AgentSearchTool(opts: AgentSearchOptions = {}) {
       name: "agentsearch_search",
       description:
         "Live web search. Returns up to 5 ranked results (title, url, content). Use for current facts or finding URLs. " +
-        "Free tier: up to 25 searches/day per IP, subject to shared daily capacity.",
+        "Free tier: up to 25 searches/day per IP, subject to shared daily capacity (no key). Paid mode: $0.008 per search.",
       schema: z.object({
-        query: z.string().min(1).describe("Search query"),
-        max_results: z.number().int().min(1).max(5).optional().describe("1-5, default 5"),
+        query: z.string().describe("Search query (non-empty)"),
+        max_results: z.number().nullable().optional().describe("1-5, default 5"),
       }),
     }
   );
@@ -140,8 +145,9 @@ function requireWallet(name: string) {
 
 export function AgentSearchExtractTool() {
   return tool(
-    async ({ url, formats, max_chars, render_fallback }) => {
+    async ({ url: rawUrl, formats, max_chars, render_fallback }) => {
       try {
+        const url = checkUrl(rawUrl);
         requireWallet("agentsearch_extract");
         const ex = (await paid("extract", { url, ...(formats ? { formats } : {}), ...(max_chars ? { max_chars } : {}) })) as Record<string, unknown>;
         if (!fallbackEnabled(render_fallback) || textLength(ex) >= THIN_CHARS) return out(ex);
@@ -163,7 +169,7 @@ export function AgentSearchExtractTool() {
         "If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, " +
         "or pass render_fallback=true to do that automatically (an extra paid render call). Paid (needs a wallet): $0.007 per call.",
       schema: z.object({
-        url: z.string().url().describe("http(s) URL to extract"),
+        url: z.string().describe("Full public http(s) URL to extract"),
         formats: z.array(z.enum(EXTRACT_FORMATS)).optional().describe("Output formats, default [\"markdown\"]"),
         max_chars: z.number().int().positive().optional(),
         render_fallback: z.boolean().optional().describe("If extract returns thin content, retry with agentsearch_render (an extra paid call; pricing: https://agentsearchhq.com/pricing)"),
@@ -176,8 +182,9 @@ export function AgentSearchRenderTool() {
   return tool(
     async (args) => {
       try {
+        const url = checkUrl(args.url);
         requireWallet("agentsearch_render");
-        const body = Object.fromEntries(Object.entries(args).filter(([, v]) => v !== undefined));
+        const body = Object.fromEntries(Object.entries({ ...args, url }).filter(([, v]) => v !== undefined));
         return out(await paid("render", body));
       } catch (e) {
         return `Error: ${errText(e)}`;
@@ -188,7 +195,7 @@ export function AgentSearchRenderTool() {
       description:
         "Render a page in a real headless browser and return markdown/text/html/links (optional screenshot). Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, content loaded by scripts). Paid (needs a wallet); pricing: https://agentsearchhq.com/pricing",
       schema: z.object({
-        url: z.string().url(),
+        url: z.string().describe("Full public http(s) URL to render"),
         formats: z.array(z.enum(EXTRACT_FORMATS)).optional(),
         max_chars: z.number().int().positive().optional(),
         screenshot: z.boolean().optional(),
@@ -203,8 +210,10 @@ export function AgentSearchRenderTool() {
 
 export function AgentSearchSearchAndReadTool() {
   return tool(
-    async ({ query, num_results, max_chars, render_fallback }) => {
+    async ({ query: rawQuery, num_results: rawN, max_chars, render_fallback }) => {
       try {
+        const query = checkQuery(rawQuery);
+        const num_results = checkCount(rawN, "num_results");
         requireWallet("agentsearch_search_and_read");
         const body: Record<string, unknown> = { query };
         if (num_results !== undefined) body.num_results = num_results;
@@ -222,8 +231,8 @@ export function AgentSearchSearchAndReadTool() {
         "Cheaper than a $0.008 search plus three $0.007 extracts ($0.029) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). " +
         "Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only — not available on Pocket. Search itself stays free by default.",
       schema: z.object({
-        query: z.string().min(1).describe("Search query"),
-        num_results: z.number().int().min(1).max(5).optional().describe("How many top results to read, default 3, max 5"),
+        query: z.string().describe("Search query (non-empty)"),
+        num_results: z.number().nullable().optional().describe("How many top results to read, default 3, max 5"),
         max_chars: z.number().int().positive().max(20000).optional().describe("Max characters of page text per result, default 8000, max 20000"),
         render_fallback: z.boolean().optional().describe("If extract is thin, render at most one page in the same $0.015 call"),
       }),

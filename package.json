@@ -1,6 +1,6 @@
 {
   "name": "@agentsearchhq/langchain",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "LangChain.js tools for AgentSearch: free live web search, plus pay-per-call extract and JS render (USDC on Base via x402, paid directly to AgentSearch)",
   "type": "module",
   "main": "dist/index.js",
@@ -28,6 +28,9 @@
   "keywords": [
     "langchain",
     "langchainjs",
+    "langgraph",
+    "search",
+    "llm",
     "agentsearch",
     "web-search",
     "tools",
