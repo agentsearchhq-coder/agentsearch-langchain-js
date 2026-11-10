@@ -1,6 +1,8 @@
 /**
- * Pay-per-call mode: call AgentSearch services on the Pocket Network Agentic Portal
- * (https://agent.pocket.network) and pay each call over x402 v2 (exact scheme,
+ * Pay-per-call mode. Since 0.3.0 paid calls go to AgentSearch's own x402 API on Base
+ * (https://api.agentsearchhq.com/x402/v1/{search,extract,render}) by default;
+ * AGENTSEARCH_PAYMENT_ROUTE=pocket uses the Pocket Network Agentic Portal
+ * (https://agent.pocket.network) instead. Both are x402 v2 (exact scheme,
  * EIP-3009 TransferWithAuthorization, USDC on Base).
  *
  * Flow: unpaid POST -> 402 with PAYMENT-REQUIRED -> every limit is checked BEFORE
@@ -24,6 +26,21 @@ export const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 export const PORTAL_PAYEE = "0xF732ea490c5766071785a2310523f7fA2CEbB829";
 /** $0.005 in USDC atomic units (6 decimals). Hard ceiling: never signs more per call. */
 export const MAX_PER_CALL_ATOMIC = 5000n;
+/** 0.3.0: AgentSearch's own x402 API (direct route, the default). */
+export const DEFAULT_DIRECT_URL = "https://api.agentsearchhq.com";
+/** AgentSearch's payee on the direct route. */
+export const DIRECT_PAYEE = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337";
+/** $0.010 hard ceiling on the direct route (search $0.008, extract $0.007, render $0.010). */
+export const DIRECT_MAX_PER_CALL_ATOMIC = 10_000n;
+/** Body fields the direct API accepts; others are dropped (and reported in payment.droppedFields). */
+export const DIRECT_FIELDS: Record<"search" | "extract" | "render", string[]> = {
+  search: ["query", "max_results"],
+  extract: ["url"],
+  render: ["url"],
+};
+export const ROUTE_ENV_VAR = "AGENTSEARCH_PAYMENT_ROUTE";
+export const LEGACY_DIRECT_ENV_VAR = "AGENTSEARCH_X402_DIRECT";
+export type PaymentRoute = "direct" | "pocket";
 /** Default session cap: $1.00. */
 export const DEFAULT_SESSION_CAP_ATOMIC = 1_000_000n;
 
@@ -42,7 +59,7 @@ export const SETUP_MESSAGE = [
   "This AgentSearch paid tool (agentsearch_search in paid mode, agentsearch_extract or agentsearch_render) needs a wallet.",
   "Set AGENTSEARCH_WALLET_PRIVATE_KEY (or POCKET_PRIVATE_KEY) in the environment of the Node.js process running your LangChain agent to the 64-hex private key of a NEW wallet made only for this.",
   "Fund that wallet with a little USDC on Base (for example $1). No ETH is needed: the x402 facilitator pays gas.",
-  "Calls are paid through the Pocket Network Agentic Portal (https://agent.pocket.network) over x402, capped per call (AGENTSEARCH_MAX_PER_CALL_ATOMIC) and per process (AGENTSEARCH_MAX_TOTAL_ATOMIC, default 1000000 = $1.00).",
+  "Calls are paid over x402 directly to AgentSearch's own API (https://api.agentsearchhq.com; search $0.008, extract $0.007, render $0.010; failed calls are not charged), or for $0.005 per call through the Pocket Network Agentic Portal with AGENTSEARCH_PAYMENT_ROUTE=pocket. Spend is capped per call (AGENTSEARCH_MAX_PER_CALL_ATOMIC) and per process (AGENTSEARCH_MAX_TOTAL_ATOMIC, default 1000000 = $1.00).",
   "Search is free by default; paid search is opt-in with AgentSearchTool({ mode: \"paid\" }) or AGENTSEARCH_MODE=paid. Pricing: https://agentsearchhq.com/pricing",
 ].join(" ");
 
@@ -71,6 +88,19 @@ export function readWalletKey(): `0x${string}` | undefined {
   return undefined;
 }
 
+/** "direct" (default since 0.3.0) or "pocket". AGENTSEARCH_PAYMENT_ROUTE wins; AGENTSEARCH_X402_DIRECT=0 also selects pocket.
+ *  Any other route value throws (nothing is signed). */
+export function paymentRoute(): PaymentRoute {
+  const v = (process.env[ROUTE_ENV_VAR] ?? "").trim().toLowerCase();
+  if (v) {
+    if (["direct", "x402", "agentsearch"].includes(v)) return "direct";
+    if (["pocket", "portal"].includes(v)) return "pocket";
+    throw new PortalError(`${ROUTE_ENV_VAR} must be 'direct' (default) or 'pocket', got '${v}'. Nothing was signed.`);
+  }
+  if (["0", "false", "no", "off"].includes((process.env[LEGACY_DIRECT_ENV_VAR] ?? "").trim().toLowerCase())) return "pocket";
+  return "direct";
+}
+
 export function hasWalletKey(): boolean {
   return KEY_ENV_VARS.some((n) => Boolean(process.env[n]?.trim()));
 }
@@ -88,23 +118,33 @@ function atomicEnv(names: string[], fallback: bigint): { value: bigint; source?:
 }
 
 export interface PortalSettings {
+  route: PaymentRoute;
+  payee: string;
+  hardCapAtomic: bigint;
   portalUrl: string;
   sessionCapAtomic: bigint;
   perCallCapAtomic: bigint;
 }
 
 export function loadPortalSettings(): PortalSettings {
-  const portalUrl = (process.env.AGENTSEARCH_PORTAL_URL?.trim() || DEFAULT_PORTAL_URL).replace(/\/+$/, "");
+  const route = paymentRoute();
+  const direct = route === "direct";
+  const urlEnv = direct ? "AGENTSEARCH_X402_DIRECT_URL" : "AGENTSEARCH_PORTAL_URL";
+  const portalUrl = (process.env[urlEnv]?.trim() || (direct ? DEFAULT_DIRECT_URL : DEFAULT_PORTAL_URL)).replace(/\/+$/, "");
   if (!isSecureOrLocalUrl(portalUrl)) {
-    throw new PortalError("AGENTSEARCH_PORTAL_URL must be https:// (http only for localhost). Nothing was signed.");
+    throw new PortalError(`${urlEnv} must be https:// (http only for localhost). Nothing was signed.`);
   }
+  const hardCap = direct ? DIRECT_MAX_PER_CALL_ATOMIC : MAX_PER_CALL_ATOMIC;
   const session = atomicEnv(["AGENTSEARCH_MAX_TOTAL_ATOMIC", "POCKET_MAX_TOTAL_ATOMIC"], DEFAULT_SESSION_CAP_ATOMIC);
-  const perCall = atomicEnv(["AGENTSEARCH_MAX_PER_CALL_ATOMIC", "POCKET_MAX_PER_CALL_ATOMIC"], MAX_PER_CALL_ATOMIC);
+  const perCall = atomicEnv(["AGENTSEARCH_MAX_PER_CALL_ATOMIC", "POCKET_MAX_PER_CALL_ATOMIC"], hardCap);
   return {
+    route,
+    payee: direct ? DIRECT_PAYEE : PORTAL_PAYEE,
+    hardCapAtomic: hardCap,
     portalUrl,
     sessionCapAtomic: session.value,
-    // A per-call setting can only lower the hard $0.005 ceiling, never raise it.
-    perCallCapAtomic: perCall.value < MAX_PER_CALL_ATOMIC ? perCall.value : MAX_PER_CALL_ATOMIC,
+    // A per-call setting can only lower the route's hard ceiling, never raise it.
+    perCallCapAtomic: perCall.value < hardCap ? perCall.value : hardCap,
   };
 }
 
@@ -146,13 +186,13 @@ interface Accept {
 }
 
 /** Picks the one option this server is willing to sign, or explains why none qualifies. */
-export function selectAccept(accepts: Accept[], ceiling: bigint): Accept {
+export function selectAccept(accepts: Accept[], ceiling: bigint, payee: string = PORTAL_PAYEE): Accept {
   const why: string[] = [];
   for (const a of accepts ?? []) {
     if (a.scheme !== "exact") { why.push(`${a.scheme} scheme`); continue; }
     if (a.network !== BASE_NETWORK) { why.push(`network ${a.network}`); continue; }
     if (!eqAddr(a.asset, USDC_BASE)) { why.push(`asset ${a.asset} is not USDC on Base`); continue; }
-    if (!eqAddr(a.payTo, PORTAL_PAYEE)) { why.push(`payee ${a.payTo} is not the portal's`); continue; }
+    if (!eqAddr(a.payTo, payee)) { why.push(`payee ${a.payTo} is not ${payee === DIRECT_PAYEE ? "AgentSearch" : "the portal"}'s`); continue; }
     if (!/^\d+$/.test(String(a.amount))) { why.push(`amount ${a.amount} is not an integer`); continue; }
     const amt = BigInt(a.amount);
     if (amt <= 0n) { why.push(`amount ${a.amount}`); continue; }
@@ -213,14 +253,29 @@ export async function callPortal(op: PortalOperation, body: Record<string, unkno
   const key = readWalletKey();
   if (!key) throw new PortalError(SETUP_MESSAGE);
   const { serviceId, path } = PORTAL_SERVICES[op];
-  const url = `${settings.portalUrl}/v1/${serviceId}${path}`;
+  const direct = settings.route === "direct";
+  const who = direct ? "AgentSearch" : "The portal";
+  let url = `${settings.portalUrl}/v1/${serviceId}${path}`;
+  let expectRes = `/v1/${serviceId}`;
+  const droppedFields: string[] = [];
+  if (direct) {
+    url = `${settings.portalUrl}/x402/v1/${op}`;
+    expectRes = `/x402/v1/${op}`;
+    const kept: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(body)) {
+      if (v === undefined || v === null) continue;
+      if (DIRECT_FIELDS[op].includes(k)) kept[k] = v;
+      else droppedFields.push(k);
+    }
+    body = kept;
+  }
 
   // 1) Unpaid request -> expect 402 terms.
   const unpaid = await post(url, body, {});
   if (unpaid.status !== 402) {
     const info = portalErrorInfo(unpaid);
     throw new PortalError(
-      `The portal answered ${unpaid.status} ${info.code} before payment: ${info.message} (retryable: ${info.retryable}). Nothing was signed.`,
+      `${who} answered ${unpaid.status} ${info.code} before payment: ${info.message} (retryable: ${info.retryable}). Nothing was signed.`,
       { error: info }
     );
   }
@@ -233,8 +288,8 @@ export async function callPortal(op: PortalOperation, body: Record<string, unkno
   }
   if (required.x402Version !== 2) throw new PortalError(`Unsupported x402Version ${required.x402Version}. Nothing was signed.`);
   const resUrl = required.resource?.url ?? "";
-  if (!resUrl.replace(/\/+$/, "").endsWith(`/v1/${serviceId}`)) {
-    throw new PortalError(`The 402 is for resource ${resUrl}, not ${serviceId}. Nothing was signed.`);
+  if (!resUrl.replace(/\/+$/, "").endsWith(expectRes)) {
+    throw new PortalError(`The 402 is for resource ${resUrl}, not ${expectRes}. Nothing was signed.`);
   }
 
   // 2) Limits, checked before anything is signed.
@@ -245,7 +300,18 @@ export async function callPortal(op: PortalOperation, body: Record<string, unkno
       `Session spend cap reached: ${atomicToUsd(budget.spent)} of ${atomicToUsd(settings.sessionCapAtomic)} signed. Raise AGENTSEARCH_MAX_TOTAL_ATOMIC and restart to spend more. Nothing was signed.`
     );
   }
-  const chosen = selectAccept(required.accepts, ceiling);
+  let chosen: Accept;
+  try {
+    chosen = selectAccept(required.accepts, ceiling, settings.payee);
+  } catch (e) {
+    if (direct && settings.perCallCapAtomic < settings.hardCapAtomic && ceiling === settings.perCallCapAtomic && e instanceof PortalError) {
+      throw new PortalError(
+        `${e.message} Your per-call cap (AGENTSEARCH_MAX_PER_CALL_ATOMIC=${settings.perCallCapAtomic}) is below this route's price; since 0.3.0 paid calls go to AgentSearch's own x402 API (search $0.008, extract $0.007, render $0.010). Raise the cap to 10000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route.`,
+        e.detail
+      );
+    }
+    throw e;
+  }
   const amount = BigInt(chosen.amount);
 
   // 3) Sign with the reference x402 client, restricted to the option chosen above.
@@ -272,7 +338,7 @@ export async function callPortal(op: PortalOperation, body: Record<string, unkno
   }
   // Belt and braces: re-check what was actually signed before it leaves this process.
   const auth = signedPayload.payload?.authorization;
-  if (!auth || !eqAddr(auth.to, PORTAL_PAYEE) || BigInt(auth.value ?? "0") !== amount || signedPayload.accepted?.network !== BASE_NETWORK || !eqAddr(signedPayload.accepted?.asset, USDC_BASE)) {
+  if (!auth || !eqAddr(auth.to, settings.payee) || BigInt(auth.value ?? "0") !== amount || signedPayload.accepted?.network !== BASE_NETWORK || !eqAddr(signedPayload.accepted?.asset, USDC_BASE)) {
     budget.reserved -= amount;
     throw new PortalError("The signed authorization does not match the approved terms; it was discarded and not sent.");
   }
@@ -297,7 +363,7 @@ export async function callPortal(op: PortalOperation, body: Record<string, unkno
   if (paid.status < 200 || paid.status >= 300) {
     const info = portalErrorInfo(paid);
     throw new PortalError(
-      `The portal answered ${paid.status} ${info.code}: ${info.message} (retryable: ${info.retryable}${info.retryAfter ? `, retry after ${info.retryAfter}s` : ""}). Per the portal, a non-2xx answer is not settled, so you should not be charged; the signed ${atomicToUsd(amount)} still counts against this session's cap.`,
+      `${who} answered ${paid.status} ${info.code}: ${info.message} (retryable: ${info.retryable}${info.retryAfter ? `, retry after ${info.retryAfter}s` : ""}). A non-2xx answer is not settled, so you should not be charged; the signed ${atomicToUsd(amount)} still counts against this session's cap.`,
       { error: info, paymentSigned: true, settled: false, spend }
     );
   }
@@ -318,9 +384,11 @@ export async function callPortal(op: PortalOperation, body: Record<string, unkno
     asset: "USDC",
     assetAddress: USDC_BASE,
     network: BASE_NETWORK,
-    payTo: PORTAL_PAYEE,
+    payTo: settings.payee,
     payer: account.address,
     serviceId,
+    ...(direct ? { rail: "agentsearch-x402-direct" } : {}),
+    ...(droppedFields.length ? { droppedFields } : {}),
     settled: receipt?.success ?? false,
     transaction: tx,
     ...(tx ? { explorer: `https://basescan.org/tx/${tx}` } : {}),

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { callPortal, hasWalletKey, PortalError, type PortalOperation } from "./pocket.js";
 import { clientHeaders, requestTimeoutMs } from "./util.js";
 
-export { resetSessionBudget, sessionSpentAtomic, PortalError } from "./pocket.js";
+export { resetSessionBudget, sessionSpentAtomic, PortalError, paymentRoute } from "./pocket.js";
 
 export const FREE_RELAY_URL = "https://relay.agentsearchhq.com";
 export const FREE_RELAY_DAILY_LIMIT = 25;
@@ -17,7 +17,7 @@ export const EXTRACT_FORMATS = ["markdown", "text", "html", "links"] as const;
 export const FREE_LIMIT_MESSAGE =
   `Free search limit reached (up to ${FREE_RELAY_DAILY_LIMIT} searches/day per IP, subject to shared daily capacity; resets daily). ` +
   "For more search plus extract/render, set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base " +
-  "(search is $0.005 per call via x402, capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, default $1.00) and opt in to paid search with " +
+  "(search is $0.008 per call via x402 to AgentSearch's own API, capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, default $1.00) and opt in to paid search with " +
   `AgentSearchTool({ mode: "paid" }) or AGENTSEARCH_MODE=paid. Docs: ${DOCS}`;
 
 export const PAID_ONLY_MESSAGE = (name: string) =>
@@ -161,7 +161,7 @@ export function AgentSearchExtractTool() {
       description:
         "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. " +
         "If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, " +
-        "or pass render_fallback=true to do that automatically (an extra paid render call). Paid (needs a wallet): $0.005 per call.",
+        "or pass render_fallback=true to do that automatically (an extra paid render call). Paid (needs a wallet): $0.007 per call.",
       schema: z.object({
         url: z.string().url().describe("http(s) URL to extract"),
         formats: z.array(z.enum(EXTRACT_FORMATS)).optional().describe("Output formats, default [\"markdown\"]"),

@@ -5,7 +5,7 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 | Tool | Name | Cost |
 |---|---|---|
 | `AgentSearchTool` | `agentsearch_search` | **Free** by default (up to 25 searches/day per IP, subject to shared daily capacity; up to 5 results; no key). Paid search only when you opt in (`mode: "paid"` or `AGENTSEARCH_MODE=paid`), $0.005/call. |
-| `AgentSearchExtractTool` | `agentsearch_extract` | $0.005/call (USDC on Base via x402) |
+| `AgentSearchExtractTool` | `agentsearch_extract` | $0.007/call (USDC on Base via x402, paid directly to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Paid, headless browser for JS pages ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)) |
 
 ## Install
@@ -47,7 +47,7 @@ AgentSearchTool({ mode: "paid" });       // or agentSearchTools({ mode: "paid" }
 ```
 
 - `free` (default): the free relay.
-- `paid`: paid search ($0.005/call). Falls back to free with a console warning if no wallet key is set.
+- `paid`: paid search ($0.008/call). Falls back to free with a console warning if no wallet key is set.
 - `auto`: paid if a wallet key is set, otherwise free.
 
 `AGENTSEARCH_MODE` (`free` / `paid` / `auto`) takes precedence over the `mode` option. A wallet key on its own never switches search to paid.
@@ -56,7 +56,7 @@ AgentSearchTool({ mode: "paid" });       // or agentSearchTools({ mode: "paid" }
 
 ## Paid mode (extract, render, opt-in paid search)
 
-Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Calls are paid per request over x402 through the Pocket Network Agentic Portal. Extract and render use the key directly; search stays free unless you opt in as above.
+Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Since 0.3.0 calls are paid per request over x402 **directly to AgentSearch's own API** (`https://api.agentsearchhq.com`, USDC on Base, settled only on success): search $0.008, extract $0.007; see [pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package) for render. $1 covers about 140 extracts. Prefer the Pocket Network Agentic Portal ($0.005 per call)? Set `AGENTSEARCH_PAYMENT_ROUTE=pocket`. On the direct route extract and render take only `url`; options like `formats`, `max_chars` or screenshots need the Pocket route (dropped options are listed in `payment.droppedFields`). Extract and render use the key directly; search stays free unless you opt in as above.
 
 **Render fallback:** when extract returns thin content (under 200 characters, e.g. a JavaScript-heavy page), pass `render_fallback: true` to the extract call, or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`, to retry automatically with render. That is a second paid call ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)); the result includes a `render_fallback` object.
 
@@ -65,7 +65,8 @@ Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by 
 | `AGENTSEARCH_WALLET_PRIVATE_KEY` / `POCKET_PRIVATE_KEY` | unset (paid tools disabled) |
 | `AGENTSEARCH_MODE` | unset (`free`, `paid` or `auto`; overrides `mode`) |
 | `AGENTSEARCH_MAX_TOTAL_ATOMIC` | `1000000` ($1.00 per process) |
-| `AGENTSEARCH_MAX_PER_CALL_ATOMIC` | `5000` ($0.005; can only be lowered) |
+| `AGENTSEARCH_PAYMENT_ROUTE` | `direct` (AgentSearch's x402 API); `pocket` = Pocket Network Agentic Portal at $0.005/call |
+| `AGENTSEARCH_MAX_PER_CALL_ATOMIC` | `10000` on the direct route, `5000` on Pocket (can only be lowered) |
 | `AGENTSEARCH_EXTRACT_RENDER_FALLBACK` | unset (`1` = extract retries thin pages with render) |
 | `AGENTSEARCH_TIMEOUT_MS` | `30000` |
 | `AGENTSEARCH_NO_CLIENT_TAG` | unset (`1` = don't send the anonymous `X-Agent-Client: @agentsearchhq/langchain/<version>` header) |
@@ -77,7 +78,7 @@ Track spend in-process:
 ```ts
 import { sessionSpentAtomic, resetSessionBudget } from "@agentsearchhq/langchain";
 
-const spent: bigint = sessionSpentAtomic();   // USDC atomic units (6 decimals), e.g. 5000n = $0.005
+const spent: bigint = sessionSpentAtomic();   // USDC atomic units (6 decimals), e.g. 7000n = $0.007
 console.log(`spent $${Number(spent) / 1e6}`);
 resetSessionBudget();                          // reset the per-process counter
 ```
@@ -93,3 +94,5 @@ Tools return `"Error: ..."` strings instead of throwing, so the agent can recove
 - OpenAPI specs: https://agentsearchhq.com/specs/search-openapi.json?utm_source=agentsearchhq-langchain&utm_medium=package
 
 MIT
+
+Release notes: [CHANGELOG.md](CHANGELOG.md).

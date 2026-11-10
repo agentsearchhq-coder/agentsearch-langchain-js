@@ -1,7 +1,7 @@
 {
   "name": "@agentsearchhq/langchain",
-  "version": "0.2.1",
-  "description": "LangChain.js tools for AgentSearch: free live web search, plus pay-per-call extract and JS render (USDC on Base via x402)",
+  "version": "0.3.0",
+  "description": "LangChain.js tools for AgentSearch: free live web search, plus pay-per-call extract and JS render (USDC on Base via x402, paid directly to AgentSearch)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
