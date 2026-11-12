@@ -1,7 +1,7 @@
 {
   "name": "@agentsearchhq/langchain",
-  "version": "0.4.1",
-  "description": "LangChain.js tools for AgentSearch: free live web search, plus pay-per-call extract and JS render (USDC on Base via x402, paid directly to AgentSearch)",
+  "version": "0.5.0",
+  "description": "LangChain.js tools for AgentSearch: free live web search, free-trial extract and JS render, plus pay-per-call news search, screenshots and search-and-read (USDC on Base via x402, paid directly to AgentSearch)",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -36,7 +36,9 @@
     "tools",
     "agents",
     "x402",
-    "rag"
+    "rag",
+    "news",
+    "screenshot"
   ],
   "license": "MIT",
   "homepage": "https://agentsearchhq.com/?utm_source=agentsearchhq-langchain&utm_medium=package",

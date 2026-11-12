@@ -38,7 +38,7 @@ async function runAgent(model, tools, question) {
 
 test("tool metadata and schemas", () => {
   const names = agentSearchTools().map((t) => t.name);
-  assert.deepEqual(names, ["agentsearch_search", "agentsearch_extract", "agentsearch_render", "agentsearch_search_and_read"]);
+  assert.deepEqual(names, ["agentsearch_search", "agentsearch_extract", "agentsearch_render", "agentsearch_search_and_read", "agentsearch_news_search", "agentsearch_screenshot"]);
 });
 
 test("free search via relay (mocked) and provider stripped", async () => {
@@ -55,9 +55,45 @@ test("429 -> friendly limit message", async () => {
   assert.equal(await t.invoke({ query: "x" }), `Error: ${FREE_LIMIT_MESSAGE}`);
 });
 
-test("paid tools refuse without a wallet", async () => {
-  assert.match(await AgentSearchExtractTool().invoke({ url: "https://example.com" }), /paid.*No wallet/);
-  assert.match(await AgentSearchRenderTool().invoke({ url: "https://example.com" }), /paid.*No wallet/);
+test("paid tools refuse without a wallet when the free trial is off", async () => {
+  process.env.AGENTSEARCH_FREE_TRIAL = "0";
+  try {
+    const nofetch = async () => { throw new Error("no network expected"); };
+    assert.match(await AgentSearchExtractTool({ fetch: nofetch }).invoke({ url: "https://example.com" }), /paid.*No wallet/);
+    assert.match(await AgentSearchRenderTool({ fetch: nofetch }).invoke({ url: "https://example.com" }), /paid.*No wallet/);
+  } finally { delete process.env.AGENTSEARCH_FREE_TRIAL; }
+});
+
+test("no wallet: extract/render use the relay free trial (mocked), screenshot flags dropped", async () => {
+  const seen = [];
+  const f = async (u, init) => { seen.push({ url: String(u), body: JSON.parse(init.body) });
+    return new Response(JSON.stringify({ markdown: "y".repeat(300), provider: "x", free_trial: { remaining_today: 4 } }), { status: 200 }); };
+  const e = JSON.parse(await AgentSearchExtractTool({ fetch: f }).invoke({ url: "https://example.com", max_chars: 500 }));
+  assert.equal(seen[0].url, "https://relay.agentsearchhq.com/v1/extract");
+  assert.equal(seen[0].body.max_chars, 500);
+  assert.match(e.note, /Free trial/); assert.equal(e.provider, undefined); assert.equal(e.payment, undefined);
+  const r = JSON.parse(await AgentSearchRenderTool({ fetch: f }).invoke({ url: "https://example.com", screenshot: true }));
+  assert.equal(seen[1].url, "https://relay.agentsearchhq.com/v1/render");
+  assert.equal(seen[1].body.screenshot, undefined);
+  assert.match(r.note, /Screenshots are not part of the free trial/);
+});
+
+test("free trial 429 -> trial limit message with wallet upgrade; 404 -> paid-only message", async () => {
+  const f429 = async () => new Response(JSON.stringify({ error: { message: "daily trial used" } }), { status: 429 });
+  const m = await AgentSearchExtractTool({ fetch: f429 }).invoke({ url: "https://example.com" });
+  assert.match(m, /Free trial limit reached for agentsearch_extract: 5 extract calls\/day per IP/);
+  assert.match(m, /\$0\.004/); assert.match(m, /daily trial used/);
+  const f404 = async () => new Response("nope", { status: 404 });
+  assert.match(await AgentSearchRenderTool({ fetch: f404 }).invoke({ url: "https://example.com" }), /paid.*No wallet/);
+});
+
+test("news and screenshot need a wallet (no network)", async () => {
+  globalThis.fetch = async () => { throw new Error("no network expected"); };
+  const n = agentSearchTools().find((t) => t.name === "agentsearch_news_search");
+  assert.match(await n.invoke({ query: "q" }), /No wallet/);
+  const sh = agentSearchTools().find((t) => t.name === "agentsearch_screenshot");
+  const msg = await sh.invoke({ id: "c1", name: "agentsearch_screenshot", args: { url: "https://example.com" }, type: "tool_call" });
+  assert.match(String(msg.content), /No wallet/);
 });
 
 test("bad wallet key is rejected without leaking it", async () => {
@@ -111,9 +147,8 @@ test("wording: per IP, no unlimited, no render price; extract formats enum", asy
   for (const s of [FREE_LIMIT_MESSAGE, readme]) assert.doesNotMatch(s, /unlimited|per user/i);
   assert.doesNotMatch(PAID_ONLY_MESSAGE("agentsearch_render"), /\$/);
   const [, ex, rd] = agentSearchTools();
-  assert.doesNotMatch(rd.description, /\$/);
+  assert.match(rd.description, /\$0\.010/);
   assert.doesNotMatch(ex.schema.shape.render_fallback.description, /\$/);
-  assert.doesNotMatch(readme, /agentsearch_render`[^\n]*\$0/);
   assert.ok(ex.schema.safeParse({ url: "https://a.b", formats: ["markdown"] }).success);
   assert.ok(!ex.schema.safeParse({ url: "https://a.b", formats: ["pdf"] }).success);
 });

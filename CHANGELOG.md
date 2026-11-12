@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 (2026-11-12)
+- **News search.** New `AgentSearchNewsTool` (`agentsearch_news_search`): recent articles with title, URL, snippet, domain and publish date, $0.008 per call on `https://api.agentsearchhq.com/x402/v1/news` (not charged when there are no results). `max_results` 1-10.
+- **Screenshots.** New `AgentSearchScreenshotTool` (`agentsearch_screenshot`): PNG or JPEG of the viewport or full page (up to 4000 px tall), optional `viewport` (e.g. 390x844), $0.010 per call. Uses `responseFormat: "content_and_artifact"`: the model text has metadata only and the base64 image is in the ToolMessage `artifact`.
+- **Search filters** on paid search, news and search-and-read: `freshness` or `date_from`/`date_to`, `country`, `language`, `include_domains`, `exclude_domains`.
+- **Free trial without a wallet** for extract (5/day per IP) and render (3/day per IP, no screenshots) through the AgentSearch free relay. Previously these returned a "needs a wallet" error. `AGENTSEARCH_FREE_TRIAL=0` restores the old behavior.
+- Extract on the direct route now forwards `max_chars` (capped at 50000) and the new `include_links`; before 0.5.0 they were dropped.
+- Prices updated to match the direct API: extract $0.004 (was $0.007), search-and-read $0.009 (was $0.015). Search $0.008 and render $0.010 unchanged. News, screenshot and search-and-read are direct-only.
+- `agentSearchTools()` now returns all six tools.
+
 ## 0.4.1 (2026-11-10)
 - Input checks before any request: an empty/whitespace-only `query`, or a missing/invalid URL (not http/https, no host, embedded credentials, localhost, private/loopback/link-local IPs, single-label or `.local`/`.internal` hosts) returns an `Error: ...` string with no HTTP call and nothing signed. Previously some of these failed schema parsing and threw. Queries and URLs are trimmed; queries are capped at 400 chars.
 - `max_results`/`num_results` accept `null` (= default) and out-of-range values are clamped to 1-5.
