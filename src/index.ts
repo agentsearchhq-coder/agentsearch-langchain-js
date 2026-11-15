@@ -4,7 +4,7 @@ import { callPortal, hasWalletKey, PortalError, type PortalOperation } from "./p
 import { clientHeaders, requestTimeoutMs } from "./util.js";
 import { checkCount, checkQuery, checkUrl } from "./validate.js";
 
-export { checkQuery, checkUrl, checkCount, InvalidInputError } from "./validate.js";
+export { checkQuery, checkUrl, checkCount, InvalidInputError, MIN_QUERY_CHARS, MAX_QUERY_CHARS } from "./validate.js";
 
 export { resetSessionBudget, sessionSpentAtomic, PortalError, paymentRoute, DIRECT_PRICES_USD, FILTER_KEYS } from "./pocket.js";
 
@@ -71,6 +71,9 @@ function stripProvider(d: unknown): unknown {
   return d;
 }
 
+/** Appended to free-relay 4xx errors (except 408/429): the input is wrong, so retrying it unchanged won't help. */
+export const RELAY_INPUT_ERROR_HINT = " This is an input error: fix the query instead of retrying it unchanged.";
+
 export async function freeSearch(query: string, maxResults?: number, f: typeof fetch = fetch): Promise<unknown> {
   const body: Record<string, unknown> = { query };
   if (maxResults !== undefined) body.max_results = maxResults;
@@ -82,7 +85,10 @@ export async function freeSearch(query: string, maxResults?: number, f: typeof f
   });
   const text = await res.text();
   if (res.status === 429) throw new AgentSearchError(FREE_LIMIT_MESSAGE, 429);
-  if (!res.ok) throw new AgentSearchError(`AgentSearch relay HTTP ${res.status}: ${text.slice(0, 500)}`, res.status);
+  if (!res.ok) {
+    const hint = res.status >= 400 && res.status < 500 && res.status !== 408 ? RELAY_INPUT_ERROR_HINT : "";
+    throw new AgentSearchError(`AgentSearch relay HTTP ${res.status}: ${text.slice(0, 500)}${hint}`, res.status);
+  }
   try { return stripProvider(JSON.parse(text)); } catch { return { raw: text }; }
 }
 

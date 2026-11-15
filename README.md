@@ -11,7 +11,7 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 | `AgentSearchNewsTool` | `agentsearch_news_search` | Paid, recent news articles with publish dates, $0.008 (direct x402 only; not charged when there are no results) |
 | `AgentSearchScreenshotTool` | `agentsearch_screenshot` | Paid, PNG/JPEG page screenshot, $0.010 (direct x402 only). Image bytes go to the tool **artifact**, not the model text |
 
-New in 0.5.0: news search, screenshots, search filters (freshness or date range, country, language, include/exclude domains) on paid search, news and search-and-read, and a no-wallet free trial for extract and render. See the [CHANGELOG](CHANGELOG.md).
+New in 0.5.1: queries under 2 characters are rejected client-side, and relay input errors say to fix the input instead of retrying. New in 0.5.0: news search, screenshots, search filters (freshness or date range, country, language, include/exclude domains) on paid search, news and search-and-read, and a no-wallet free trial for extract and render. See the [CHANGELOG](CHANGELOG.md).
 
 ## Install
 
@@ -108,7 +108,7 @@ resetSessionBudget();                          // reset the per-process counter
 
 ## Errors
 
-Tools return `"Error: ..."` strings instead of throwing, so the agent can recover. A 429 from the free relay means the daily limit (up to 25 searches/day per IP, subject to shared daily capacity) was hit, and the message explains how to upgrade. Paid tools without a wallet return a message and make no request.
+Tools return `"Error: ..."` strings instead of throwing, so the agent can recover. A 429 from the free relay means the daily limit (up to 25 searches/day per IP, subject to shared daily capacity) was hit, and the message explains how to upgrade. Paid tools without a wallet return a message and make no request. A free-relay 4xx (other than 408/429) means the input was rejected: the error says to fix the query instead of retrying it unchanged.
 
 ## Docs
 
@@ -122,6 +122,6 @@ Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Input checks (0.4.1)
 
-Inputs are checked before any request is sent, so bad input never counts against the free daily limit and nothing is signed: an empty or whitespace-only `query`, or a URL that isn't a full public `http(s)` URL (no credentials, no localhost/private IPs/single-label hosts), returns an `Error: ...` string. `max_results: null` means the default and out-of-range counts are clamped to 1-5.
+Inputs are checked before any request is sent, so bad input never counts against the free daily limit and nothing is signed: an empty, whitespace-only or under-2-character `query` (0.5.1), or a URL that isn't a full public `http(s)` URL (no credentials, no localhost/private IPs/single-label hosts), returns an `Error: ...` string. `max_results: null` means the default and out-of-range counts are clamped to 1-5.
 
 Docs: https://agentsearchhq.com/docs?utm_source=agentsearchhq-langchain&utm_medium=package · x402 API: https://agentsearchhq.com/docs/x402?utm_source=agentsearchhq-langchain&utm_medium=package

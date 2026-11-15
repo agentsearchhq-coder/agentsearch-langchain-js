@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 (2026-11-14)
+- Queries shorter than 2 characters (after trimming) on search, news and search-and-read now return an `Error: ...` string with no HTTP call and nothing signed, so they never count against the free relay's per-IP limits. The free relay rejects them with HTTP 400 anyway. `MIN_QUERY_CHARS` is exported.
+- Free-relay 4xx errors (except 408 and 429) now tell the agent to fix the input instead of retrying it unchanged (`RELAY_INPUT_ERROR_HINT`). Matches `@agentsearchhq/agentsearch-mcp` 1.8.1, `langchain-agentsearch` 0.7.1 and the 0.5.1 CrewAI / LlamaIndex / OpenAI Agents packages.
+
 ## 0.5.0 (2026-11-12)
 - **News search.** New `AgentSearchNewsTool` (`agentsearch_news_search`): recent articles with title, URL, snippet, domain and publish date, $0.008 per call on `https://api.agentsearchhq.com/x402/v1/news` (not charged when there are no results). `max_results` 1-10.
 - **Screenshots.** New `AgentSearchScreenshotTool` (`agentsearch_screenshot`): PNG or JPEG of the viewport or full page (up to 4000 px tall), optional `viewport` (e.g. 390x844), $0.010 per call. Uses `responseFormat: "content_and_artifact"`: the model text has metadata only and the base64 image is in the ToolMessage `artifact`.

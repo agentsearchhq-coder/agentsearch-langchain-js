@@ -23,9 +23,9 @@ test("query trimmed, null max_results = default, clamping", async () => {
   const { f, calls } = counter();
   const t = AgentSearchTool({ fetch: f });
   await t.invoke({ query: "  lc  ", max_results: null });
-  await t.invoke({ query: "x", max_results: 50 });
-  await t.invoke({ query: "x", max_results: 0 });
-  assert.deepEqual(calls.map((c) => c.body), [{ query: "lc" }, { query: "x", max_results: 5 }, { query: "x", max_results: 1 }]);
+  await t.invoke({ query: "xx", max_results: 50 });
+  await t.invoke({ query: "xx", max_results: 0 });
+  assert.deepEqual(calls.map((c) => c.body), [{ query: "lc" }, { query: "xx", max_results: 5 }, { query: "xx", max_results: 1 }]);
 });
 
 const BAD = ["", "example.com/page", "ftp://example.com/x", "javascript:alert(1)", "file:///etc/passwd", "https://user:pw@example.com/",

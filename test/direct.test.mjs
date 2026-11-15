@@ -52,7 +52,7 @@ for (const op of ["search", "extract", "render", "search_and_read"]) {
   test(`default ${op} signs ${PRICES[op]} to AgentSearch's payee on the direct API`, async () => {
     const seen = mockApi(op);
     const t = op === "search" ? AgentSearchTool({ mode: "paid" }) : op === "extract" ? AgentSearchExtractTool() : op === "search_and_read" ? AgentSearchSearchAndReadTool() : AgentSearchRenderTool();
-    const arg = op === "search" ? { query: "q", max_results: 3 } : op === "search_and_read" ? { query: "q", num_results: 3 } : { url: "https://example.com", formats: ["markdown"] };
+    const arg = op === "search" ? { query: "qq", max_results: 3 } : op === "search_and_read" ? { query: "qq", num_results: 3 } : { url: "https://example.com", formats: ["markdown"] };
     const out = JSON.parse(await t.invoke(arg));
     assert.equal(seen.calls[0].url, `${API}/x402/v1/${op}`);
     const a = seen.signed.payload.authorization;
@@ -113,13 +113,13 @@ test("e2e against local mock direct API", { skip: !MOCK }, async () => {
 test("search_and_read is direct-only", async () => {
   process.env.AGENTSEARCH_PAYMENT_ROUTE = "pocket";
   globalThis.fetch = async () => { throw new Error("no network expected"); };
-  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "q" }), /own x402 API/);
+  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "qq" }), /own x402 API/);
 });
 
 test("search_and_read with a $0.005 cap refuses and hints 20000", async () => {
   process.env.AGENTSEARCH_MAX_PER_CALL_ATOMIC = "5000";
   const seen = mockApi("search_and_read");
-  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "q" }), /to 20000/);
+  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "qq" }), /to 20000/);
   assert.ok(seen.calls.every((c) => !c.sig));
 });
 
@@ -127,7 +127,7 @@ test("search_and_read with no wallet does not hit the free relay", async () => {
   delete process.env.AGENTSEARCH_WALLET_PRIVATE_KEY;
   delete process.env.POCKET_PRIVATE_KEY;
   globalThis.fetch = async () => { throw new Error("no network expected"); };
-  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "q" }), /No wallet is configured|needs a wallet/i);
+  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "qq" }), /No wallet is configured|needs a wallet/i);
 });
 
 test("news signs $0.008 to /x402/v1/news with filters; max_results clamped to 10", async () => {
@@ -141,10 +141,10 @@ test("news signs $0.008 to /x402/v1/news with filters; max_results clamped to 10
 
 test("paid search and search_and_read forward filters; extract forwards max_chars (capped 50000) and include_links", async () => {
   let seen = mockApi("search");
-  await AgentSearchTool({ mode: "paid" }).invoke({ query: "q", language: "en", date_from: "2026-11-01" });
-  assert.deepEqual(seen.calls[1].body, { query: "q", language: "en", date_from: "2026-11-01" });
+  await AgentSearchTool({ mode: "paid" }).invoke({ query: "qq", language: "en", date_from: "2026-11-01" });
+  assert.deepEqual(seen.calls[1].body, { query: "qq", language: "en", date_from: "2026-11-01" });
   resetSessionBudget(); seen = mockApi("search_and_read");
-  await AgentSearchSearchAndReadTool().invoke({ query: "q", exclude_domains: ["pinterest.com"] });
+  await AgentSearchSearchAndReadTool().invoke({ query: "qq", exclude_domains: ["pinterest.com"] });
   assert.deepEqual(seen.calls[1].body.exclude_domains, ["pinterest.com"]);
   resetSessionBudget(); seen = mockApi("extract");
   const out = JSON.parse(await AgentSearchExtractTool().invoke({ url: "https://example.com", max_chars: 90000, include_links: true, formats: ["markdown"] }));
@@ -177,7 +177,7 @@ for (const T of [AgentSearchNewsTool, AgentSearchScreenshotTool]) {
   test(`${T.name} is direct-only`, async () => {
     process.env.AGENTSEARCH_PAYMENT_ROUTE = "pocket";
     globalThis.fetch = async () => { throw new Error("no network expected"); };
-    const r = T === AgentSearchNewsTool ? await T().invoke({ query: "q" }) : (await T().invoke({ id: "c", name: "agentsearch_screenshot", type: "tool_call", args: { url: "https://example.com" } })).content;
+    const r = T === AgentSearchNewsTool ? await T().invoke({ query: "qq" }) : (await T().invoke({ id: "c", name: "agentsearch_screenshot", type: "tool_call", args: { url: "https://example.com" } })).content;
     assert.match(String(r), /own x402 API/);
   });
 }
