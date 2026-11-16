@@ -8,8 +8,8 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 | `AgentSearchExtractTool` | `agentsearch_extract` | **Free trial** with no wallet (5 calls/day per IP), then $0.002/call (USDC on Base via x402, paid directly to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Headless browser for JS pages. **Free trial** with no wallet (3 calls/day per IP, no screenshots), then $0.005/call |
 | `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | Paid, search + top page text in one call, $0.005 (direct x402 only; charged only when at least one page returns text) |
-| `AgentSearchNewsTool` | `agentsearch_news_search` | Paid, recent news articles with publish dates, $0.005 (direct x402 only; not charged when there are no results) |
-| `AgentSearchScreenshotTool` | `agentsearch_screenshot` | Paid, PNG/JPEG page screenshot, $0.005 (direct x402 only). Image bytes go to the tool **artifact**, not the model text |
+| `AgentSearchNewsTool` | `agentsearch_news_search` | Paid, recent news articles with publish dates, $0.003 (direct x402 only; not charged when there are no results) |
+| `AgentSearchScreenshotTool` | `agentsearch_screenshot` | Paid, PNG/JPEG page screenshot, $0.004 (direct x402 only). Image bytes go to the tool **artifact**, not the model text |
 
 New in 0.5.1: queries under 2 characters are rejected client-side, and relay input errors say to fix the input instead of retrying. New in 0.5.0: news search, screenshots, search filters (freshness or date range, country, language, include/exclude domains) on paid search, news and search-and-read, and a no-wallet free trial for extract and render. See the [CHANGELOG](CHANGELOG.md).
 
