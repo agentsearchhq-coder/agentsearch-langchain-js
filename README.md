@@ -4,12 +4,12 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 
 | Tool | Name | Cost |
 |---|---|---|
-| `AgentSearchTool` | `agentsearch_search` | **Free** by default (up to 25 searches/day per IP, subject to shared daily capacity; up to 5 results; no key). Paid search only when you opt in (`mode: "paid"` or `AGENTSEARCH_MODE=paid`), $0.008/call. |
+| `AgentSearchTool` | `agentsearch_search` | **Free** by default (up to 25 searches/day per IP, subject to shared daily capacity; up to 5 results; no key). Paid search only when you opt in (`mode: "paid"` or `AGENTSEARCH_MODE=paid`), $0.005/call. |
 | `AgentSearchExtractTool` | `agentsearch_extract` | **Free trial** with no wallet (5 calls/day per IP), then $0.004/call (USDC on Base via x402, paid directly to AgentSearch) |
-| `AgentSearchRenderTool` | `agentsearch_render` | Headless browser for JS pages. **Free trial** with no wallet (3 calls/day per IP, no screenshots), then $0.010/call |
-| `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | Paid, search + top page text in one call, $0.009 (direct x402 only; charged only when at least one page returns text) |
-| `AgentSearchNewsTool` | `agentsearch_news_search` | Paid, recent news articles with publish dates, $0.008 (direct x402 only; not charged when there are no results) |
-| `AgentSearchScreenshotTool` | `agentsearch_screenshot` | Paid, PNG/JPEG page screenshot, $0.010 (direct x402 only). Image bytes go to the tool **artifact**, not the model text |
+| `AgentSearchRenderTool` | `agentsearch_render` | Headless browser for JS pages. **Free trial** with no wallet (3 calls/day per IP, no screenshots), then $0.005/call |
+| `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | Paid, search + top page text in one call, $0.006 (direct x402 only; charged only when at least one page returns text) |
+| `AgentSearchNewsTool` | `agentsearch_news_search` | Paid, recent news articles with publish dates, $0.005 (direct x402 only; not charged when there are no results) |
+| `AgentSearchScreenshotTool` | `agentsearch_screenshot` | Paid, PNG/JPEG page screenshot, $0.005 (direct x402 only). Image bytes go to the tool **artifact**, not the model text |
 
 New in 0.5.1: queries under 2 characters are rejected client-side, and relay input errors say to fix the input instead of retrying. New in 0.5.0: news search, screenshots, search filters (freshness or date range, country, language, include/exclude domains) on paid search, news and search-and-read, and a no-wallet free trial for extract and render. See the [CHANGELOG](CHANGELOG.md).
 
@@ -52,7 +52,7 @@ AgentSearchTool({ mode: "paid" });       // or agentSearchTools({ mode: "paid" }
 ```
 
 - `free` (default): the free relay.
-- `paid`: paid search ($0.008/call). Falls back to free with a console warning if no wallet key is set.
+- `paid`: paid search ($0.005/call). Falls back to free with a console warning if no wallet key is set.
 - `auto`: paid if a wallet key is set, otherwise free.
 
 `AGENTSEARCH_MODE` (`free` / `paid` / `auto`) takes precedence over the `mode` option. A wallet key on its own never switches search to paid.
@@ -78,9 +78,9 @@ const pngBase64 = msg.artifact?.screenshot?.base64;   // msg.content has metadat
 
 ## Paid mode (extract, render, search-and-read, news, screenshot, opt-in paid search)
 
-Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Since 0.3.0 calls are paid per request over x402 **directly to AgentSearch's own API** (`https://api.agentsearchhq.com`, USDC on Base, settled only on success): search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search-and-read $0.009 ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)). $1 covers about 250 extracts or 111 search-and-read calls. Prefer the Pocket Network Agentic Portal ($0.005 per call; search, extract and render only)? Set `AGENTSEARCH_PAYMENT_ROUTE=pocket`. On the direct route extract takes `url`, `max_chars` and `include_links`, and render takes only `url`; other options are dropped and listed in `payment.droppedFields`. Extract and render use the key directly; search stays free unless you opt in as above.
+Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Since 0.3.0 calls are paid per request over x402 **directly to AgentSearch's own API** (`https://api.agentsearchhq.com`, USDC on Base, settled only on success): search $0.005, news $0.005, extract $0.004, render $0.005, screenshot $0.005, search-and-read $0.006 ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)). $1 covers about 250 extracts or 111 search-and-read calls. Prefer the Pocket Network Agentic Portal ($0.005 per call; search, extract and render only)? Set `AGENTSEARCH_PAYMENT_ROUTE=pocket`. On the direct route extract takes `url`, `max_chars` and `include_links`, and render takes only `url`; other options are dropped and listed in `payment.droppedFields`. Extract and render use the key directly; search stays free unless you opt in as above.
 
-**Render fallback:** when extract returns thin content (under 200 characters, e.g. a JavaScript-heavy page), pass `render_fallback: true` to the extract call, or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`, to retry automatically with render. That is a second call ($0.010 with a wallet, or one of the 3 free-trial renders without one); the result includes a `render_fallback` object.
+**Render fallback:** when extract returns thin content (under 200 characters, e.g. a JavaScript-heavy page), pass `render_fallback: true` to the extract call, or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`, to retry automatically with render. That is a second call ($0.005 with a wallet, or one of the 3 free-trial renders without one); the result includes a `render_fallback` object.
 
 | Env var | Default |
 |---|---|
