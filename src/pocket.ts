@@ -30,7 +30,7 @@ export const MAX_PER_CALL_ATOMIC = 5000n;
 export const DEFAULT_DIRECT_URL = "https://api.agentsearchhq.com";
 /** AgentSearch's payee on the direct route. */
 export const DIRECT_PAYEE = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337";
-/** $0.020 hard ceiling on the direct route (search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search_and_read $0.009). */
+/** $0.020 hard ceiling on the direct route (search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search_and_read $0.005). */
 export const DIRECT_MAX_PER_CALL_ATOMIC = 20_000n;
 /** Body fields the direct API accepts; others are dropped (and reported in payment.droppedFields). */
 /** Search filters the direct API accepts on search, news and search_and_read. */
@@ -44,7 +44,7 @@ export const DIRECT_FIELDS: Record<PortalOperation, string[]> = {
   search_and_read: ["query", "num_results", "max_results", "max_chars", "render_fallback", ...FILTER_KEYS],
 };
 /** Published direct prices, for messages only (the 402 is authoritative; the per-call ceiling is the guard). */
-export const DIRECT_PRICES_USD: Record<PortalOperation, string> = { search: "$0.008", extract: "$0.004", render: "$0.010", search_and_read: "$0.009", news: "$0.008", screenshot: "$0.010" };
+export const DIRECT_PRICES_USD: Record<PortalOperation, string> = { search: "$0.003", extract: "$0.002", render: "$0.005", search_and_read: "$0.005", news: "$0.003", screenshot: "$0.004" };
 export const DIRECT_ONLY_OPS = ["search_and_read", "news", "screenshot"] as const;
 const DIRECT_ONLY_TOOL: Record<string, string> = { search_and_read: "agentsearch_search_and_read", news: "agentsearch_news_search", screenshot: "agentsearch_screenshot" };
 export const ROUTE_ENV_VAR = "AGENTSEARCH_PAYMENT_ROUTE";
@@ -68,7 +68,7 @@ export const SETUP_MESSAGE = [
   "This AgentSearch paid tool (agentsearch_search in paid mode, agentsearch_extract, agentsearch_render, agentsearch_search_and_read, agentsearch_news_search or agentsearch_screenshot) needs a wallet.",
   "Set AGENTSEARCH_WALLET_PRIVATE_KEY (or POCKET_PRIVATE_KEY) in the environment of the Node.js process running your LangChain agent to the 64-hex private key of a NEW wallet made only for this.",
   "Fund that wallet with a little USDC on Base (for example $1). No ETH is needed: the x402 facilitator pays gas.",
-  "Calls are paid over x402 directly to AgentSearch's own API (https://api.agentsearchhq.com; search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search_and_read $0.009; failed calls are not charged), or for $0.005 per call through the Pocket Network Agentic Portal with AGENTSEARCH_PAYMENT_ROUTE=pocket (search, extract and render only). Spend is capped per call (AGENTSEARCH_MAX_PER_CALL_ATOMIC) and per process (AGENTSEARCH_MAX_TOTAL_ATOMIC, default 1000000 = $1.00).",
+  "Calls are paid over x402 directly to AgentSearch's own API (https://api.agentsearchhq.com; search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search_and_read $0.005; failed calls are not charged), or for $0.005 per call through the Pocket Network Agentic Portal with AGENTSEARCH_PAYMENT_ROUTE=pocket (search, extract and render only). Spend is capped per call (AGENTSEARCH_MAX_PER_CALL_ATOMIC) and per process (AGENTSEARCH_MAX_TOTAL_ATOMIC, default 1000000 = $1.00).",
   "Search is free by default; paid search is opt-in with AgentSearchTool({ mode: \"paid\" }) or AGENTSEARCH_MODE=paid. Pricing: https://agentsearchhq.com/pricing",
 ].join(" ");
 
@@ -322,7 +322,7 @@ export async function callPortal(op: PortalOperation, body: Record<string, unkno
   } catch (e) {
     if (direct && settings.perCallCapAtomic < settings.hardCapAtomic && ceiling === settings.perCallCapAtomic && e instanceof PortalError) {
       throw new PortalError(
-        `${e.message} Your per-call cap (AGENTSEARCH_MAX_PER_CALL_ATOMIC=${settings.perCallCapAtomic}) is below this route's price; since 0.3.0 paid calls go to AgentSearch's own x402 API (search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search_and_read $0.009). Raise the cap to 20000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route (search, extract and render only).`,
+        `${e.message} Your per-call cap (AGENTSEARCH_MAX_PER_CALL_ATOMIC=${settings.perCallCapAtomic}) is below this route's price; since 0.3.0 paid calls go to AgentSearch's own x402 API (search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search_and_read $0.005). Raise the cap to 20000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route (search, extract and render only).`,
         e.detail
       );
     }

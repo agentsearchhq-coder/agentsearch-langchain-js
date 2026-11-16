@@ -82,7 +82,7 @@ test("free trial 429 -> trial limit message with wallet upgrade; 404 -> paid-onl
   const f429 = async () => new Response(JSON.stringify({ error: { message: "daily trial used" } }), { status: 429 });
   const m = await AgentSearchExtractTool({ fetch: f429 }).invoke({ url: "https://example.com" });
   assert.match(m, /Free trial limit reached for agentsearch_extract: 5 extract calls\/day per IP/);
-  assert.match(m, /\$0\.004/); assert.match(m, /daily trial used/);
+  assert.match(m, /\$0\.002/); assert.match(m, /daily trial used/);
   const f404 = async () => new Response("nope", { status: 404 });
   assert.match(await AgentSearchRenderTool({ fetch: f404 }).invoke({ url: "https://example.com" }), /paid.*No wallet/);
 });
@@ -147,7 +147,7 @@ test("wording: per IP, no unlimited, no render price; extract formats enum", asy
   for (const s of [FREE_LIMIT_MESSAGE, readme]) assert.doesNotMatch(s, /unlimited|per user/i);
   assert.doesNotMatch(PAID_ONLY_MESSAGE("agentsearch_render"), /\$/);
   const [, ex, rd] = agentSearchTools();
-  assert.match(rd.description, /\$0\.010/);
+  assert.match(rd.description, /\$0\.005/);
   assert.doesNotMatch(ex.schema.shape.render_fallback.description, /\$/);
   assert.ok(ex.schema.safeParse({ url: "https://a.b", formats: ["markdown"] }).success);
   assert.ok(!ex.schema.safeParse({ url: "https://a.b", formats: ["pdf"] }).success);

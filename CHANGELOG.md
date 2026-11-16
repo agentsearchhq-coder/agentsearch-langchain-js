@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.2 (2026-11-15)
+- Direct x402 list prices now match the live API (approved 2026-11-15): search and news $0.003, extract $0.002, render $0.005, screenshot $0.004, search_and_read $0.005. Runtime price constants, tool text, docs and tests updated. Pocket route remains $0.005. The per-call ceiling stays $0.020.
+
 ## 0.5.1 (2026-11-14)
 - Queries shorter than 2 characters (after trimming) on search, news and search-and-read now return an `Error: ...` string with no HTTP call and nothing signed, so they never count against the free relay's per-IP limits. The free relay rejects them with HTTP 400 anyway. `MIN_QUERY_CHARS` is exported.
 - Free-relay 4xx errors (except 408 and 429) now tell the agent to fix the input instead of retrying it unchanged (`RELAY_INPUT_ERROR_HINT`). Matches `@agentsearchhq/agentsearch-mcp` 1.8.1, `langchain-agentsearch` 0.7.1 and the 0.5.1 CrewAI / LlamaIndex / OpenAI Agents packages.

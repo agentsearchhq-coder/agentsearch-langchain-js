@@ -32,7 +32,7 @@ export function trialLimitMessage(op: "extract" | "render", relayMessage = ""): 
   const reason = relayMessage ? ` Relay said: ${relayMessage.slice(0, 300)}` : "";
   return (
     `Free trial limit reached for agentsearch_${op}: ${FREE_TRIAL_LIMITS[op]} ${op} calls/day per IP (resets 00:00 UTC), subject to shared daily capacity.${reason} ` +
-    `Continue with a wallet: ${op} costs ${op === "extract" ? "$0.004" : "$0.010"} per call in USDC on Base via AgentSearch's x402 API (no account, no API key; $0.005 via Pocket with AGENTSEARCH_PAYMENT_ROUTE=pocket): ` +
+    `Continue with a wallet: ${op} costs ${op === "extract" ? "$0.002" : "$0.005"} per call in USDC on Base via AgentSearch's x402 API (no account, no API key; $0.005 via Pocket with AGENTSEARCH_PAYMENT_ROUTE=pocket): ` +
     "set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base. Spend is capped by AGENTSEARCH_MAX_TOTAL_ATOMIC (default $1.00). " +
     `Wallet setup (about 2 minutes): ${WALLET_SETUP}`
   );
@@ -43,7 +43,7 @@ class FreeTrialUnavailable extends Error {}
 export const FREE_LIMIT_MESSAGE =
   `Free search limit reached (up to ${FREE_RELAY_DAILY_LIMIT} searches/day per IP, subject to shared daily capacity; resets daily). ` +
   "For more search plus extract/render, set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base " +
-  "(search is $0.008 per call via x402 to AgentSearch's own API, capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, default $1.00) and opt in to paid search with " +
+  "(search is $0.003 per call via x402 to AgentSearch's own API, capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, default $1.00) and opt in to paid search with " +
   `AgentSearchTool({ mode: "paid" }) or AGENTSEARCH_MODE=paid. Docs: ${DOCS}`;
 
 export const PAID_ONLY_MESSAGE = (name: string) =>
@@ -184,7 +184,7 @@ export function AgentSearchTool(opts: AgentSearchOptions = {}) {
       name: "agentsearch_search",
       description:
         "Live web search. Returns up to 5 ranked results (title, url, content). Use for current facts or finding URLs. " +
-        "Free tier: up to 25 searches/day per IP, subject to shared daily capacity (no key). Paid mode: $0.008 per search and also honors freshness/date range, country, language and include/exclude domain filters (the free tier ignores them). For recent news use agentsearch_news_search.",
+        "Free tier: up to 25 searches/day per IP, subject to shared daily capacity (no key). Paid mode: $0.003 per search and also honors freshness/date range, country, language and include/exclude domain filters (the free tier ignores them). For recent news use agentsearch_news_search.",
       schema: z.object({
         query: z.string().describe("Search query (non-empty)"),
         max_results: z.number().nullable().optional().describe("1-5, default 5"),
@@ -259,7 +259,7 @@ export function AgentSearchExtractTool(opts: TrialOptions = {}) {
       description:
         "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. " +
         "If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, " +
-        "or pass render_fallback=true to do that automatically (an extra render call). No wallet: free trial, 5 calls/day per IP. With a wallet: $0.004 per call (USDC on Base via x402 to AgentSearch's API).",
+        "or pass render_fallback=true to do that automatically (an extra render call). No wallet: free trial, 5 calls/day per IP. With a wallet: $0.002 per call (USDC on Base via x402 to AgentSearch's API).",
       schema: z.object({
         url: z.string().describe("Full public http(s) URL to extract"),
         formats: z.array(z.enum(EXTRACT_FORMATS)).optional().describe("Output formats, default [\"markdown\"]"),
@@ -294,7 +294,7 @@ export function AgentSearchRenderTool(opts: TrialOptions = {}) {
     {
       name: "agentsearch_render",
       description:
-        "Render a page in a real headless browser and return markdown/text/html/links (optional screenshot). Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, content loaded by scripts). No wallet: free trial, 3 calls/day per IP (no screenshots). With a wallet: $0.010 per call (USDC on Base via x402 to AgentSearch's API). For just an image of the page use agentsearch_screenshot.",
+        "Render a page in a real headless browser and return markdown/text/html/links (optional screenshot). Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, content loaded by scripts). No wallet: free trial, 3 calls/day per IP (no screenshots). With a wallet: $0.005 per call (USDC on Base via x402 to AgentSearch's API). For just an image of the page use agentsearch_screenshot.",
       schema: z.object({
         url: z.string().describe("Full public http(s) URL to render"),
         formats: z.array(z.enum(EXTRACT_FORMATS)).optional(),
@@ -329,14 +329,14 @@ export function AgentSearchSearchAndReadTool() {
     {
       name: "agentsearch_search_and_read",
       description:
-        "Search the live web and return the top results with each page's main text in one paid call ($0.009 USDC on Base, charged only when at least one page returns text). " +
-        "Cheaper than a $0.008 search plus three $0.004 extracts ($0.020) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). " +
+        "Search the live web and return the top results with each page's main text in one paid call ($0.005 USDC on Base, charged only when at least one page returns text). " +
+        "Cheaper than a $0.003 search plus three $0.002 extracts ($0.009) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). " +
         "Supports freshness/date range, country, language and include/exclude domain filters. Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only, not available on Pocket. Search itself stays free by default.",
       schema: z.object({
         query: z.string().describe("Search query (non-empty)"),
         num_results: z.number().nullable().optional().describe("How many top results to read, default 3, max 5"),
         max_chars: z.number().int().positive().max(20000).optional().describe("Max characters of page text per result, default 8000, max 20000"),
-        render_fallback: z.boolean().optional().describe("If extract is thin, render at most one page in the same $0.009 call"),
+        render_fallback: z.boolean().optional().describe("If extract is thin, render at most one page in the same $0.005 call"),
         ...FILTER_SCHEMA,
       }),
     }
@@ -361,7 +361,7 @@ export function AgentSearchNewsTool() {
       description:
         "Search recent news articles: title, URL, snippet, domain and publish date for each, plus the filters applied. Use for current events, company or product news, and anything where recency matters; " +
         "for general web results use agentsearch_search, and to read an article pass its URL to agentsearch_extract. Supports freshness (day, week, month, year) or a date_from/date_to range, country, language and include/exclude domains. " +
-        "Paid: $0.008 per call (USDC on Base via x402 to AgentSearch's own API), not charged when there are no results. Needs a wallet; not on Pocket or the free relay.",
+        "Paid: $0.003 per call (USDC on Base via x402 to AgentSearch's own API), not charged when there are no results. Needs a wallet; not on Pocket or the free relay.",
       schema: z.object({
         query: z.string().describe("News topic, company, person or event (non-empty)"),
         max_results: z.number().int().nullable().optional().describe("How many articles, 1-10, default 5"),
@@ -400,7 +400,7 @@ export function AgentSearchScreenshotTool() {
       description:
         "Load a public URL in a real headless browser and capture a PNG or JPEG screenshot of the viewport or the full page (up to 4000 px tall), plus title, final URL and HTTP status. " +
         "Use for visual checks, layout or UI questions, and pages where the look matters; for page text use agentsearch_extract. Set viewport (e.g. 390x844) for mobile. " +
-        "Paid: $0.010 per call (USDC on Base via x402 to AgentSearch's own API), failed captures are not charged. Needs a wallet; not on Pocket or the free relay. The image bytes go to the tool artifact, not into this text.",
+        "Paid: $0.004 per call (USDC on Base via x402 to AgentSearch's own API), failed captures are not charged. Needs a wallet; not on Pocket or the free relay. The image bytes go to the tool artifact, not into this text.",
       responseFormat: "content_and_artifact",
       schema: z.object({
         url: z.string().describe("Full public http(s) URL to capture"),

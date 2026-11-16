@@ -59,7 +59,7 @@ test("checkCount", () => {
 });
 
 test("descriptions show direct prices", () => {
-  assert.match(AgentSearchTool().description, /\$0\.008/);
-  assert.match(AgentSearchExtractTool().description, /\$0\.004/);
+  assert.match(AgentSearchTool().description, /\$0\.003/);
+  assert.match(AgentSearchExtractTool().description, /\$0\.002/);
   assert.doesNotMatch(AgentSearchExtractTool().description, /\$0\.007/);
 });
