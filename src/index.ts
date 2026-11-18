@@ -2,9 +2,9 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { callPortal, hasWalletKey, PortalError, type PortalOperation } from "./pocket.js";
 import { clientHeaders, requestTimeoutMs } from "./util.js";
-import { checkCount, checkQuery, checkUrl } from "./validate.js";
+import { checkCount, checkQuery, checkUrl, coerceCount } from "./validate.js";
 
-export { checkQuery, checkUrl, checkCount, InvalidInputError, MIN_QUERY_CHARS, MAX_QUERY_CHARS } from "./validate.js";
+export { checkQuery, checkUrl, checkCount, coerceCount, InvalidInputError, MIN_QUERY_CHARS, MAX_QUERY_CHARS } from "./validate.js";
 
 export { resetSessionBudget, sessionSpentAtomic, PortalError, paymentRoute, DIRECT_PRICES_USD, FILTER_KEYS } from "./pocket.js";
 
@@ -74,9 +74,15 @@ function stripProvider(d: unknown): unknown {
 /** Appended to free-relay 4xx errors (except 408/429): the input is wrong, so retrying it unchanged won't help. */
 export const RELAY_INPUT_ERROR_HINT = " This is an input error: fix the query instead of retrying it unchanged.";
 
+/** Free relay search. Also safe to hand to a framework as a plain function: query may be a tool-input object
+ *  ({query, max_results}) and maxResults may be a number, a numeric string, a tool-input object or an unrelated
+ *  object such as a RunnableConfig (ignored). Empty or missing queries throw InvalidInputError before any request. */
 export async function freeSearch(query: string, maxResults?: number, f: typeof fetch = fetch): Promise<unknown> {
-  const body: Record<string, unknown> = { query };
-  if (maxResults !== undefined) body.max_results = maxResults;
+  const q = checkQuery(query);
+  const n = coerceCount(maxResults);
+  if (typeof f !== "function") f = fetch;
+  const body: Record<string, unknown> = { query: q };
+  if (n !== undefined) body.max_results = n;
   const res = await f(`${FREE_RELAY_URL}/v1/search`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json", ...clientHeaders() },

@@ -1,6 +1,6 @@
 {
   "name": "@agentsearchhq/langchain",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "LangChain.js tools for AgentSearch: free live web search, free-trial extract and JS render, plus pay-per-call news search, screenshots and search-and-read (USDC on Base via x402, paid directly to AgentSearch)",
   "type": "module",
   "main": "dist/index.js",

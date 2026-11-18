@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4 (2026-11-18)
+- Fix HTTP 400s from the free relay. `freeSearch()` (also used when you pass it to a framework as a plain function, e.g. `RunnableLambda`/`tool(freeSearch)`) now unwraps a whole tool-input object passed as `query` (`{query, max_results}`), ignores a non-count object in the `maxResults` slot (such as the RunnableConfig a framework passes as the 2nd argument), accepts a numeric string or `{max_results: n}` for the count, clamps it to 1-5, and throws a clear `InvalidInputError` before any request when the query is empty, missing or not a string/number. Nothing is sent or charged in that case.
+- `checkQuery` / `checkCount` apply the same unwrapping (`coerceCount` is new: never throws). The `X-Agent-Client` tag now reports the real package version.
+
 ## 0.5.3 (2026-11-16)
 - Docs only: README tool table: news $0.003 and screenshot $0.004 (were still $0.005). Live direct prices: search and news $0.003, extract $0.002, render $0.005, screenshot $0.004, search_and_read $0.005; Pocket route unchanged at $0.005. No code or behavior change.
 

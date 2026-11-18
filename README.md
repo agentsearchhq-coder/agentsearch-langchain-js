@@ -11,7 +11,7 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 | `AgentSearchNewsTool` | `agentsearch_news_search` | Paid, recent news articles with publish dates, $0.003 (direct x402 only; not charged when there are no results) |
 | `AgentSearchScreenshotTool` | `agentsearch_screenshot` | Paid, PNG/JPEG page screenshot, $0.004 (direct x402 only). Image bytes go to the tool **artifact**, not the model text |
 
-New in 0.5.1: queries under 2 characters are rejected client-side, and relay input errors say to fix the input instead of retrying. New in 0.5.0: news search, screenshots, search filters (freshness or date range, country, language, include/exclude domains) on paid search, news and search-and-read, and a no-wallet free trial for extract and render. See the [CHANGELOG](CHANGELOG.md).
+New in 0.5.4: `freeSearch()` tolerates tool-input objects and framework config objects in its arguments instead of sending them to the relay (fixes HTTP 400s). New in 0.5.1: queries under 2 characters are rejected client-side, and relay input errors say to fix the input instead of retrying. New in 0.5.0: news search, screenshots, search filters (freshness or date range, country, language, include/exclude domains) on paid search, news and search-and-read, and a no-wallet free trial for extract and render. See the [CHANGELOG](CHANGELOG.md).
 
 ## Install
 

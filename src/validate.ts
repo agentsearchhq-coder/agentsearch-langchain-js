@@ -11,7 +11,27 @@ export class InvalidInputError extends Error {
   constructor(message: string) { super(message + NOTHING); this.name = "InvalidInputError"; }
 }
 
-export function checkQuery(q: unknown): string {
+const QUERY_KEYS = ["query", "q", "input", "search_query", "text", "value"];
+const COUNT_KEYS = ["max_results", "num_results", "k", "limit", "count", "value"];
+
+/** Unwrap a tool-input object ({query: "x", max_results: 3}) that a caller passed where a scalar was expected.
+ *  Returns the first matching key's value (recursively), or undefined when the object has none of the keys
+ *  (for example a LangChain RunnableConfig handed in as the second argument). */
+function unwrap(v: unknown, keys: string[]): unknown {
+  for (let depth = 0; depth < 4; depth++) {
+    if (Array.isArray(v)) { v = v.find((x) => typeof x === "string" || typeof x === "number" || (x && typeof x === "object")); continue; }
+    if (!v || typeof v !== "object") return v;
+    const o = v as Record<string, unknown>;
+    const k = keys.find((x) => o[x] !== undefined && o[x] !== null);
+    if (k === undefined) return undefined;
+    v = o[k];
+  }
+  return v && typeof v === "object" ? undefined : v;
+}
+
+export function checkQuery(raw: unknown): string {
+  let q = unwrap(raw, QUERY_KEYS);
+  if (typeof q === "number" && Number.isFinite(q)) q = String(q);
   if (typeof q !== "string") throw new InvalidInputError('query is required: pass a non-empty search string, e.g. {"query": "latest LangChain release"}.');
   const s = q.trim();
   if (!s) throw new InvalidInputError("query is empty or whitespace-only: pass a non-empty search string.");
@@ -20,12 +40,19 @@ export function checkQuery(q: unknown): string {
   return s;
 }
 
-/** undefined/null -> undefined (server default); out-of-range values are clamped. */
-export function checkCount(v: unknown, name: string, lo = 1, hi = 5): number | undefined {
-  if (v === undefined || v === null || v === "") return undefined;
-  const n = Number(v);
+/** undefined/null/unusable object -> undefined (server default); tool-input objects and numeric strings are unwrapped;
+ *  out-of-range values are clamped. A non-numeric string throws. */
+export function checkCount(raw: unknown, name: string, lo = 1, hi = 5): number | undefined {
+  const v = unwrap(raw, COUNT_KEYS);
+  if (v === undefined || v === null || v === "" || typeof v === "boolean" || typeof v === "object") return undefined;
+  const n = typeof v === "string" ? Number(v.trim()) : Number(v);
   if (!Number.isFinite(n)) throw new InvalidInputError(`${name} must be a whole number from ${lo} to ${hi} (or omitted for the default).`);
   return Math.max(lo, Math.min(hi, Math.trunc(n)));
+}
+
+/** Like checkCount but never throws: anything unusable means "use the default". */
+export function coerceCount(raw: unknown, name = "max_results", lo = 1, hi = 5): number | undefined {
+  try { return checkCount(raw, name, lo, hi); } catch { return undefined; }
 }
 
 function privateIp(h: string): boolean {
