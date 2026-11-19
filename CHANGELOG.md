@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 (2026-11-19)
+- **With a wallet, search pays by default.** The search mode now defaults to `auto`: when a wallet is configured, `agentsearch_search` pays $0.003 per call over x402 to AgentSearch's own API ($0.005 with `AGENTSEARCH_PAYMENT_ROUTE=pocket`). With no wallet it uses the free relay exactly as before. `mode: "free"` or `AGENTSEARCH_MODE=free` is the opt-out. Spend caps are unchanged (per call and `AGENTSEARCH_MAX_TOTAL_ATOMIC`, default $1.00).
+- **Reuse an existing wallet:** `AGENTSEARCH_WALLET_FILE` points at a file holding a 64-hex key or JSON with `privateKey` (`agentcash` = AgentCash's `~/.agentcash/wallet.json`). Read only when signing; never logged. New exports: `walletFilePath`, `walletSource`, `WALLET_FILE_ENV_VAR`.
+- **Mode is visible:** search results carry `agentsearch_mode`; `searchModeLabel()` is exported; one stderr line when a tool is created with paid search.
+- README: search price in the tool table fixed to $0.003 (was $0.005).
+
 ## 0.5.4 (2026-11-18)
 - Fix HTTP 400s from the free relay. `freeSearch()` (also used when you pass it to a framework as a plain function, e.g. `RunnableLambda`/`tool(freeSearch)`) now unwraps a whole tool-input object passed as `query` (`{query, max_results}`), ignores a non-count object in the `maxResults` slot (such as the RunnableConfig a framework passes as the 2nd argument), accepts a numeric string or `{max_results: n}` for the count, clamps it to 1-5, and throws a clear `InvalidInputError` before any request when the query is empty, missing or not a string/number. Nothing is sent or charged in that case.
 - `checkQuery` / `checkCount` apply the same unwrapping (`coerceCount` is new: never throws). The `X-Agent-Client` tag now reports the real package version.

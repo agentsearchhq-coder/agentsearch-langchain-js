@@ -1,12 +1,12 @@
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import { callPortal, hasWalletKey, PortalError, type PortalOperation } from "./pocket.js";
+import { callPortal, hasWalletKey, paymentRoute, PortalError, walletSource, type PortalOperation } from "./pocket.js";
 import { clientHeaders, requestTimeoutMs } from "./util.js";
 import { checkCount, checkQuery, checkUrl, coerceCount } from "./validate.js";
 
 export { checkQuery, checkUrl, checkCount, coerceCount, InvalidInputError, MIN_QUERY_CHARS, MAX_QUERY_CHARS } from "./validate.js";
 
-export { resetSessionBudget, sessionSpentAtomic, PortalError, paymentRoute, DIRECT_PRICES_USD, FILTER_KEYS } from "./pocket.js";
+export { resetSessionBudget, sessionSpentAtomic, PortalError, paymentRoute, DIRECT_PRICES_USD, FILTER_KEYS, WALLET_FILE_ENV_VAR, walletFilePath, walletSource } from "./pocket.js";
 
 export const FREE_RELAY_URL = "https://relay.agentsearchhq.com";
 export const FREE_RELAY_DAILY_LIMIT = 25;
@@ -43,8 +43,9 @@ class FreeTrialUnavailable extends Error {}
 export const FREE_LIMIT_MESSAGE =
   `Free search limit reached (up to ${FREE_RELAY_DAILY_LIMIT} searches/day per IP, subject to shared daily capacity; resets daily). ` +
   "For more search plus extract/render, set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base " +
-  "(search is $0.003 per call via x402 to AgentSearch's own API, capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, default $1.00) and opt in to paid search with " +
-  `AgentSearchTool({ mode: "paid" }) or AGENTSEARCH_MODE=paid. Docs: ${DOCS}`;
+  "(or AGENTSEARCH_WALLET_FILE to an existing wallet file; AGENTSEARCH_WALLET_FILE=agentcash reuses ~/.agentcash/wallet.json). " +
+  "With a wallet, search pays $0.003 per call via x402 to AgentSearch's own API (capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, default $1.00); " +
+  `if you set AGENTSEARCH_MODE=free or mode: "free", remove it. Docs: ${DOCS}`;
 
 export const PAID_ONLY_MESSAGE = (name: string) =>
   `${name} is paid (USDC on Base via x402; see ${PRICING}). No wallet is configured, so no call was made. ` +
@@ -58,9 +59,10 @@ export class AgentSearchError extends Error {
 }
 
 export interface AgentSearchOptions {
-  /** Developer setting, never exposed to the model. "free" (default): free relay.
-   *  "paid": paid search (falls back to free with a warning if no wallet key is set).
-   *  "auto": paid only if a wallet key is set, else free. AGENTSEARCH_MODE overrides this. */
+  /** Developer setting, never exposed to the model. "auto" (default since 0.6.0): paid search ($0.003) when a wallet is
+   *  configured (AGENTSEARCH_WALLET_PRIVATE_KEY, POCKET_PRIVATE_KEY or AGENTSEARCH_WALLET_FILE), else the free relay.
+   *  "free": free relay even with a wallet (the opt-out). "paid": paid search (falls back to free with a warning if no wallet is set).
+   *  AGENTSEARCH_MODE overrides this. */
   mode?: SearchMode;
   /** Custom fetch (tests). */
   fetch?: typeof fetch;
@@ -154,19 +156,49 @@ function envMode(): SearchMode | "" {
   return (SEARCH_MODES as readonly string[]).includes(v) ? (v as SearchMode) : "";
 }
 
-/** "paid" or "free" for one search call. Precedence: AGENTSEARCH_MODE > mode option > "free".
- *  A wallet key alone never switches search to paid. */
+/** "paid" or "free" for one search call. Precedence: AGENTSEARCH_MODE > mode option > "auto".
+ *  Since 0.6.0 the default is "auto": a configured wallet makes search paid; AGENTSEARCH_MODE=free (or mode: "free") opts out. */
 export function resolveSearchMode(mode?: string): "paid" | "free" {
-  const chosen = envMode() || (mode ? String(mode).trim().toLowerCase() : "") || "free";
+  const chosen = envMode() || (mode ? String(mode).trim().toLowerCase() : "") || "auto";
   if (!(SEARCH_MODES as readonly string[]).includes(chosen))
     throw new AgentSearchError(`mode must be one of 'free', 'paid', 'auto' (got ${JSON.stringify(mode)}). No call was made.`);
   if (chosen === "free") return "free";
   if (chosen === "auto") return hasWalletKey() ? "paid" : "free";
   if (!hasWalletKey()) {
-    console.warn("AgentSearch: paid search requested, but no wallet key is set (AGENTSEARCH_WALLET_PRIVATE_KEY); using free search instead.");
+    console.warn("AgentSearch: paid search requested, but no wallet is set (AGENTSEARCH_WALLET_PRIVATE_KEY or AGENTSEARCH_WALLET_FILE); using free search instead.");
     return "free";
   }
   return "paid";
+}
+
+/** Human-readable label for the search mode a call would use; also put on every search result as agentsearch_mode. */
+export function searchModeLabel(mode?: string): string {
+  let m: "paid" | "free";
+  try { m = resolveSearchMode(mode); } catch { return "invalid mode (use auto, free or paid)"; }
+  if (m === "paid") {
+    let route = "direct";
+    try { route = paymentRoute(); } catch { /* reported when the call is made */ }
+    return route === "pocket"
+      ? "paid: x402 via the Pocket portal, $0.005 per search (AGENTSEARCH_PAYMENT_ROUTE=pocket; AGENTSEARCH_MODE=free keeps search free)"
+      : "paid: x402 to AgentSearch's API, $0.003 per search (wallet configured; AGENTSEARCH_MODE=free keeps search free)";
+  }
+  return hasWalletKey()
+    ? "free: AgentSearch free tier, up to 25 searches/day per IP (mode free; a wallet is configured but search does not pay)"
+    : "free: AgentSearch free tier, up to 25 searches/day per IP (no wallet configured)";
+}
+
+function withMode(v: unknown, label: string): unknown {
+  return v && typeof v === "object" && !Array.isArray(v) ? { agentsearch_mode: label, ...(v as Record<string, unknown>) } : v;
+}
+
+let announced = false;
+/** One stderr line per process when search will pay, so a wallet never makes search paid silently. */
+function announceMode(mode?: string): void {
+  if (announced || typeof process === "undefined") return;
+  announced = true;
+  try {
+    if (resolveSearchMode(mode) === "paid") console.error(`AgentSearch search mode: ${searchModeLabel(mode)}; wallet from ${walletSource()}.`);
+  } catch { /* invalid mode is reported per call */ }
 }
 
 const out = (v: unknown) => JSON.stringify(v);
@@ -175,13 +207,15 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function AgentSearchTool(opts: AgentSearchOptions = {}) {
   if (opts.mode !== undefined && !(SEARCH_MODES as readonly string[]).includes(opts.mode))
     throw new AgentSearchError(`mode must be 'free', 'paid' or 'auto' (got ${JSON.stringify(opts.mode)})`);
+  announceMode(opts.mode);
   return tool(
     async (args) => {
       try {
         const query = checkQuery(args.query);
         const max_results = checkCount(args.max_results, "max_results");
-        if (resolveSearchMode(opts.mode) === "paid") return out(await paid("search", { query, ...(max_results ? { max_results } : {}), ...pickFilters(args) }));
-        return out(await freeSearch(query, max_results, opts.fetch));
+        const label = searchModeLabel(opts.mode);
+        if (resolveSearchMode(opts.mode) === "paid") return out(withMode(await paid("search", { query, ...(max_results ? { max_results } : {}), ...pickFilters(args) }), label));
+        return out(withMode(await freeSearch(query, max_results, opts.fetch), label));
       } catch (e) {
         return `Error: ${errText(e)}`;
       }
@@ -190,7 +224,7 @@ export function AgentSearchTool(opts: AgentSearchOptions = {}) {
       name: "agentsearch_search",
       description:
         "Live web search. Returns up to 5 ranked results (title, url, content). Use for current facts or finding URLs. " +
-        "Free tier: up to 25 searches/day per IP, subject to shared daily capacity (no key). Paid mode: $0.003 per search and also honors freshness/date range, country, language and include/exclude domain filters (the free tier ignores them). For recent news use agentsearch_news_search.",
+        "Free with no wallet: up to 25 searches/day per IP, subject to shared daily capacity (no key). With a wallet configured: $0.003 per search (the result's agentsearch_mode says which), and it also honors freshness/date range, country, language and include/exclude domain filters (the free tier ignores them). For recent news use agentsearch_news_search.",
       schema: z.object({
         query: z.string().describe("Search query (non-empty)"),
         max_results: z.number().nullable().optional().describe("1-5, default 5"),

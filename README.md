@@ -4,7 +4,7 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 
 | Tool | Name | Cost |
 |---|---|---|
-| `AgentSearchTool` | `agentsearch_search` | **Free** by default (up to 25 searches/day per IP, subject to shared daily capacity; up to 5 results; no key). Paid search only when you opt in (`mode: "paid"` or `AGENTSEARCH_MODE=paid`), $0.005/call. |
+| `AgentSearchTool` | `agentsearch_search` | **Free** with no wallet (up to 25 searches/day per IP, subject to shared daily capacity; up to 5 results; no key). With a wallet configured, $0.003/call (from 0.6.0; `mode: "free"` or `AGENTSEARCH_MODE=free` keeps it free). |
 | `AgentSearchExtractTool` | `agentsearch_extract` | **Free trial** with no wallet (5 calls/day per IP), then $0.002/call (USDC on Base via x402, paid directly to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Headless browser for JS pages. **Free trial** with no wallet (3 calls/day per IP, no screenshots), then $0.005/call |
 | `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | Paid, search + top page text in one call, $0.005 (direct x402 only; charged only when at least one page returns text) |
@@ -48,14 +48,15 @@ console.log(res.messages.at(-1)?.content);
 The model only sees `agentsearch_search({ query, max_results })`; it can never choose paid search. The mode is a developer setting:
 
 ```ts
-AgentSearchTool({ mode: "paid" });       // or agentSearchTools({ mode: "paid" })
+AgentSearchTool();                        // auto: paid with a wallet, free without
+AgentSearchTool({ mode: "free" });        // keep search free even with a wallet
 ```
 
-- `free` (default): the free relay.
-- `paid`: paid search ($0.003/call). Falls back to free with a console warning if no wallet key is set.
-- `auto`: paid if a wallet key is set, otherwise free.
+- `auto` (default since 0.6.0): paid search ($0.003/call via x402 to AgentSearch) when a wallet is configured, otherwise the free relay.
+- `free`: the free relay, even with a wallet (the opt-out).
+- `paid`: paid search. Falls back to free with a console warning if no wallet is set.
 
-`AGENTSEARCH_MODE` (`free` / `paid` / `auto`) takes precedence over the `mode` option. A wallet key on its own never switches search to paid.
+`AGENTSEARCH_MODE` (`auto` / `free` / `paid`) takes precedence over the `mode` option. Every search result has an `agentsearch_mode` field (`"free: …"` or `"paid: …"`), `searchModeLabel()` returns the same text, and when search will pay, one line is written to stderr when the tool is created. Before 0.6.0 the default was `free` (a wallet key never made search paid).
 
 `agentsearch_extract` accepts `formats` (`markdown`, `text`, `html`, `links`), `max_chars` (up to 50000 on the direct API), `include_links` and `render_fallback`. `agentsearch_render` accepts the same `formats` plus `screenshot`, `wait_until`, `wait_for_selector` and `wait_ms` (on the direct route only `url` is sent; use `agentsearch_screenshot` for images). `agentsearch_news_search` takes `query`, `max_results` (1-10) and the filters below. `agentsearch_screenshot` takes `url`, `format` (`png`/`jpeg`), `full_page` and `viewport` (`{ width, height }`, e.g. 390x844 for mobile).
 
@@ -76,9 +77,11 @@ const pngBase64 = msg.artifact?.screenshot?.base64;   // msg.content has metadat
 
 **Free trial (no wallet):** extract and render work without a wallet through the AgentSearch free relay: 5 extracts and 3 renders per day per IP (resets 00:00 UTC, subject to shared daily capacity, no screenshots). Results carry a `note` and a `free_trial` object with what's left today. Set `AGENTSEARCH_FREE_TRIAL=0` to turn it off. When it runs out, the error explains how to continue with a wallet.
 
-## Paid mode (extract, render, search-and-read, news, screenshot, opt-in paid search)
+## Paid mode (search, extract, render, search-and-read, news, screenshot)
 
-Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Since 0.3.0 calls are paid per request over x402 **directly to AgentSearch's own API** (`https://api.agentsearchhq.com`, USDC on Base, settled only on success): search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search-and-read $0.005 ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)). $1 covers about 500 extracts or 200 search-and-read calls. Prefer the Pocket Network Agentic Portal ($0.005 per call; search, extract and render only)? Set `AGENTSEARCH_PAYMENT_ROUTE=pocket`. On the direct route extract takes `url`, `max_chars` and `include_links`, and render takes only `url`; other options are dropped and listed in `payment.droppedFields`. Extract and render use the key directly; search stays free unless you opt in as above.
+Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by the Pocket Network portal tooling) to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Since 0.3.0 calls are paid per request over x402 **directly to AgentSearch's own API** (`https://api.agentsearchhq.com`, USDC on Base, settled only on success): search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search-and-read $0.005 ([pricing](https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package)). $1 covers about 500 extracts or 200 search-and-read calls. Prefer the Pocket Network Agentic Portal ($0.005 per call; search, extract and render only)? Set `AGENTSEARCH_PAYMENT_ROUTE=pocket`. On the direct route extract takes `url`, `max_chars` and `include_links`, and render takes only `url`; other options are dropped and listed in `payment.droppedFields`. With a wallet, search pays $0.003 per call too unless you set `mode: "free"` or `AGENTSEARCH_MODE=free`.
+
+**Reuse a wallet you already have (0.6.0+).** Instead of pasting a key, set `AGENTSEARCH_WALLET_FILE` to a file holding a 64-hex private key, or JSON with a `privateKey` field. `AGENTSEARCH_WALLET_FILE=agentcash` reuses AgentCash's `~/.agentcash/wallet.json`. The file is read only when signing and its contents are never logged. Encrypted keystores and remote signers (CDP server wallets) are not supported yet.
 
 **Render fallback:** when extract returns thin content (under 200 characters, e.g. a JavaScript-heavy page), pass `render_fallback: true` to the extract call, or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`, to retry automatically with render. That is a second call ($0.005 with a wallet, or one of the 3 free-trial renders without one); the result includes a `render_fallback` object.
 
@@ -86,7 +89,8 @@ Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (or `POCKET_PRIVATE_KEY`, the name used by 
 |---|---|
 | `AGENTSEARCH_WALLET_PRIVATE_KEY` / `POCKET_PRIVATE_KEY` | unset (paid tools disabled; extract/render use the free trial) |
 | `AGENTSEARCH_FREE_TRIAL` | on; `0` turns off the no-wallet extract/render trial |
-| `AGENTSEARCH_MODE` | unset (`free`, `paid` or `auto`; overrides `mode`) |
+| `AGENTSEARCH_WALLET_FILE` | unset (path to a wallet file instead of a pasted key; `agentcash` = `~/.agentcash/wallet.json`) |
+| `AGENTSEARCH_MODE` | unset = `auto` (`auto`, `free` or `paid`; overrides `mode`) |
 | `AGENTSEARCH_MAX_TOTAL_ATOMIC` | `1000000` ($1.00 per process) |
 | `AGENTSEARCH_PAYMENT_ROUTE` | `direct` (AgentSearch's x402 API); `pocket` = Pocket Network Agentic Portal at $0.005/call |
 | `AGENTSEARCH_MAX_PER_CALL_ATOMIC` | `20000` on the direct route, `5000` on Pocket (can only be lowered) |

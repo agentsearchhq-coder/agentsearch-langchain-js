@@ -115,22 +115,26 @@ test("LIVE: fake-model agent does one real free search", { skip: !process.env.AG
   assert.match(ans, /"url":"https?:\/\//);
 });
 
-test("wallet key alone never switches search to paid; schema hides mode", async () => {
+test("0.6.0: a wallet makes search paid by default; mode free / AGENTSEARCH_MODE=free opt out; schema hides mode", async () => {
+  const { resolveSearchMode, searchModeLabel } = await import("../dist/index.js");
+  assert.equal(resolveSearchMode(), "free"); // no wallet -> free relay as before
+  assert.match(searchModeLabel(), /^free: .*no wallet configured/);
   process.env.AGENTSEARCH_WALLET_PRIVATE_KEY = "0x" + "11".repeat(32);
   try {
-    const { resolveSearchMode } = await import("../dist/index.js");
-    assert.equal(resolveSearchMode(), "free");
+    assert.equal(resolveSearchMode(), "paid");
+    assert.match(searchModeLabel(), /^paid: x402 to AgentSearch's API, \$0\.003 per search/);
     assert.equal(resolveSearchMode("auto"), "paid");
     assert.equal(resolveSearchMode("paid"), "paid");
-    const t = AgentSearchTool({ fetch: fakeFetch(200, { results: [] }) });
-    await t.invoke({ query: "xx" });
+    assert.equal(resolveSearchMode("free"), "free");
+    const t = AgentSearchTool({ mode: "free", fetch: fakeFetch(200, { results: [] }) });
+    const r = JSON.parse(await t.invoke({ query: "xx" }));
     assert.equal(fakeFetch.last.url, "https://relay.agentsearchhq.com/v1/search");
+    assert.match(r.agentsearch_mode, /^free: .*wallet is configured but search does not pay/);
     process.env.AGENTSEARCH_MODE = "free";
     assert.equal(resolveSearchMode("paid"), "free");
   } finally {
     delete process.env.AGENTSEARCH_WALLET_PRIVATE_KEY; delete process.env.AGENTSEARCH_MODE;
   }
-  const { resolveSearchMode } = await import("../dist/index.js");
   assert.equal(resolveSearchMode("paid"), "free"); // no key -> free fallback
   for (const t of agentSearchTools()) {
     const keys = Object.keys(t.schema.shape);
