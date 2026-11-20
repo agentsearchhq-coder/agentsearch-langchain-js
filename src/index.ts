@@ -9,6 +9,7 @@ export { checkQuery, checkUrl, checkCount, coerceCount, InvalidInputError, MIN_Q
 export { resetSessionBudget, sessionSpentAtomic, PortalError, paymentRoute, DIRECT_PRICES_USD, FILTER_KEYS, WALLET_FILE_ENV_VAR, walletFilePath, walletSource } from "./pocket.js";
 
 export const FREE_RELAY_URL = "https://relay.agentsearchhq.com";
+/** Free searches per IP in total (lifetime allowance since 2026-11-19, not per day). Name kept for compatibility. */
 export const FREE_RELAY_DAILY_LIMIT = 25;
 const DOCS = "https://agentsearchhq.com/?utm_source=agentsearchhq-langchain&utm_medium=package";
 const PRICING = "https://agentsearchhq.com/pricing?utm_source=agentsearchhq-langchain&utm_medium=package";
@@ -41,7 +42,7 @@ export function trialLimitMessage(op: "extract" | "render", relayMessage = ""): 
 class FreeTrialUnavailable extends Error {}
 
 export const FREE_LIMIT_MESSAGE =
-  `Free search limit reached (up to ${FREE_RELAY_DAILY_LIMIT} searches/day per IP, subject to shared daily capacity; resets daily). ` +
+  `Free search limit reached (${FREE_RELAY_DAILY_LIMIT} free searches per IP in total, then pay per call, subject to shared daily capacity; the free searches do not reset). ` +
   "For more search plus extract/render, set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base " +
   "(or AGENTSEARCH_WALLET_FILE to an existing wallet file; AGENTSEARCH_WALLET_FILE=agentcash reuses ~/.agentcash/wallet.json). " +
   "With a wallet, search pays $0.003 per call via x402 to AgentSearch's own API (capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, default $1.00); " +
@@ -183,8 +184,8 @@ export function searchModeLabel(mode?: string): string {
       : "paid: x402 to AgentSearch's API, $0.003 per search (wallet configured; AGENTSEARCH_MODE=free keeps search free)";
   }
   return hasWalletKey()
-    ? "free: AgentSearch free tier, up to 25 searches/day per IP (mode free; a wallet is configured but search does not pay)"
-    : "free: AgentSearch free tier, up to 25 searches/day per IP (no wallet configured)";
+    ? "free: AgentSearch free tier, 25 free searches per IP in total, then pay per call (mode free; a wallet is configured but search does not pay)"
+    : "free: AgentSearch free tier, 25 free searches per IP in total, then pay per call (no wallet configured)";
 }
 
 function withMode(v: unknown, label: string): unknown {
@@ -224,7 +225,7 @@ export function AgentSearchTool(opts: AgentSearchOptions = {}) {
       name: "agentsearch_search",
       description:
         "Live web search. Returns up to 5 ranked results (title, url, content). Use for current facts or finding URLs. " +
-        "Free with no wallet: up to 25 searches/day per IP, subject to shared daily capacity (no key). With a wallet configured: $0.003 per search (the result's agentsearch_mode says which), and it also honors freshness/date range, country, language and include/exclude domain filters (the free tier ignores them). For recent news use agentsearch_news_search.",
+        "Free with no wallet: 25 free searches per IP in total, then pay per call, subject to shared daily capacity (no key). With a wallet configured: $0.003 per search (the result's agentsearch_mode says which), and it also honors freshness/date range, country, language and include/exclude domain filters (the free tier ignores them). For recent news use agentsearch_news_search.",
       schema: z.object({
         query: z.string().describe("Search query (non-empty)"),
         max_results: z.number().nullable().optional().describe("1-5, default 5"),

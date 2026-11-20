@@ -148,6 +148,8 @@ test("wording: per IP, no unlimited, no render price; extract formats enum", asy
   const readme = fs.readFileSync(new URL("../README.md", import.meta.url), "utf8");
   const { PAID_ONLY_MESSAGE } = await import("../dist/index.js");
   assert.match(FREE_LIMIT_MESSAGE, /per IP.*shared daily capacity/);
+  assert.match(FREE_LIMIT_MESSAGE, /25 free searches per IP in total, then pay per call/);
+  assert.doesNotMatch(FREE_LIMIT_MESSAGE, /searches\/day|resets daily/);
   for (const s of [FREE_LIMIT_MESSAGE, readme]) assert.doesNotMatch(s, /unlimited|per user/i);
   assert.doesNotMatch(PAID_ONLY_MESSAGE("agentsearch_render"), /\$/);
   const [, ex, rd] = agentSearchTools();

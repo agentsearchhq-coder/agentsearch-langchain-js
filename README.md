@@ -4,7 +4,7 @@ LangChain.js tools for [AgentSearch](https://agentsearchhq.com/?utm_source=agent
 
 | Tool | Name | Cost |
 |---|---|---|
-| `AgentSearchTool` | `agentsearch_search` | **Free** with no wallet (up to 25 searches/day per IP, subject to shared daily capacity; up to 5 results; no key). With a wallet configured, $0.003/call (from 0.6.0; `mode: "free"` or `AGENTSEARCH_MODE=free` keeps it free). |
+| `AgentSearchTool` | `agentsearch_search` | **Free** with no wallet (25 free searches per IP in total, then pay per call, subject to shared daily capacity; up to 5 results; no key). With a wallet configured, $0.003/call (from 0.6.0; `mode: "free"` or `AGENTSEARCH_MODE=free` keeps it free). |
 | `AgentSearchExtractTool` | `agentsearch_extract` | **Free trial** with no wallet (5 calls/day per IP), then $0.002/call (USDC on Base via x402, paid directly to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Headless browser for JS pages. **Free trial** with no wallet (3 calls/day per IP, no screenshots), then $0.005/call |
 | `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | Paid, search + top page text in one call, $0.005 (direct x402 only; charged only when at least one page returns text) |
@@ -112,7 +112,7 @@ resetSessionBudget();                          // reset the per-process counter
 
 ## Errors
 
-Tools return `"Error: ..."` strings instead of throwing, so the agent can recover. A 429 from the free relay means the daily limit (up to 25 searches/day per IP, subject to shared daily capacity) was hit, and the message explains how to upgrade. Paid tools without a wallet return a message and make no request. A free-relay 4xx (other than 408/429) means the input was rejected: the error says to fix the query instead of retrying it unchanged.
+Tools return `"Error: ..."` strings instead of throwing, so the agent can recover. A 429 from the free relay means the free search allowance (25 free searches per IP in total, then pay per call) is used up or shared daily capacity is reached, and the message explains how to upgrade. Paid tools without a wallet return a message and make no request. A free-relay 4xx (other than 408/429) means the input was rejected: the error says to fix the query instead of retrying it unchanged.
 
 ## Docs
 
@@ -126,6 +126,6 @@ Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Input checks (0.4.1)
 
-Inputs are checked before any request is sent, so bad input never counts against the free daily limit and nothing is signed: an empty, whitespace-only or under-2-character `query` (0.5.1), or a URL that isn't a full public `http(s)` URL (no credentials, no localhost/private IPs/single-label hosts), returns an `Error: ...` string. `max_results: null` means the default and out-of-range counts are clamped to 1-5.
+Inputs are checked before any request is sent, so bad input never counts against the free search allowance and nothing is signed: an empty, whitespace-only or under-2-character `query` (0.5.1), or a URL that isn't a full public `http(s)` URL (no credentials, no localhost/private IPs/single-label hosts), returns an `Error: ...` string. `max_results: null` means the default and out-of-range counts are clamped to 1-5.
 
 Docs: https://agentsearchhq.com/docs?utm_source=agentsearchhq-langchain&utm_medium=package · x402 API: https://agentsearchhq.com/docs/x402?utm_source=agentsearchhq-langchain&utm_medium=package
