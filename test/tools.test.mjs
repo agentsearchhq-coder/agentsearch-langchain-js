@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { AIMessage, HumanMessage, ToolMessage } from "@langchain/core/messages";
 import { BaseChatModel } from "@langchain/core/language_models/chat_models";
-import { AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool, agentSearchTools, FREE_LIMIT_MESSAGE } from "../dist/index.js";
+import { AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchNewsTool, AgentSearchScreenshotTool, agentSearchTools, FREE_LIMIT_MESSAGE } from "../dist/index.js";
 
 for (const k of ["AGENTSEARCH_WALLET_PRIVATE_KEY", "POCKET_PRIVATE_KEY"]) delete process.env[k];
 
@@ -87,13 +87,18 @@ test("free trial 429 -> trial limit message with wallet upgrade; 404 -> paid-onl
   assert.match(await AgentSearchRenderTool({ fetch: f404 }).invoke({ url: "https://example.com" }), /paid.*No wallet/);
 });
 
-test("news and screenshot need a wallet (no network)", async () => {
-  globalThis.fetch = async () => { throw new Error("no network expected"); };
-  const n = agentSearchTools().find((t) => t.name === "agentsearch_news_search");
-  assert.match(await n.invoke({ query: "qq" }), /No wallet/);
-  const sh = agentSearchTools().find((t) => t.name === "agentsearch_screenshot");
-  const msg = await sh.invoke({ id: "c1", name: "agentsearch_screenshot", args: { url: "https://example.com" }, type: "tool_call" });
-  assert.match(String(msg.content), /No wallet/);
+test("news and screenshot use the free relay with no wallet", async () => {
+  const seen = [];
+  const f = async (url, init) => {
+    seen.push(String(url));
+    return new Response(JSON.stringify({ query: "qq", results: [], url: "https://example.com/", screenshot: { format: "png", width: 1, height: 1, base64: "a" } }), { status: 200 });
+  };
+  const n = JSON.parse(await AgentSearchNewsTool({ fetch: f }).invoke({ query: "qq" }));
+  assert.ok(seen.some((u) => u.endsWith("/v1/news")), seen.join(","));
+  assert.equal(n.results.length, 0);
+  const msg = await AgentSearchScreenshotTool({ fetch: f }).invoke({ id: "c1", name: "agentsearch_screenshot", args: { url: "https://example.com" }, type: "tool_call" });
+  assert.ok(seen.some((u) => u.endsWith("/v1/screenshot")), seen.join(","));
+  assert.doesNotMatch(String(msg.content), /^Error:/);
 });
 
 test("bad wallet key is rejected without leaking it", async () => {

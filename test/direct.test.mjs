@@ -51,7 +51,7 @@ test("route: direct by default; pocket selectable; legacy switch; invalid throws
 for (const op of ["search", "extract", "render", "search_and_read"]) {
   test(`default ${op} signs ${PRICES[op]} to AgentSearch's payee on the direct API`, async () => {
     const seen = mockApi(op);
-    const t = op === "search" ? AgentSearchTool({ mode: "paid" }) : op === "extract" ? AgentSearchExtractTool() : op === "search_and_read" ? AgentSearchSearchAndReadTool() : AgentSearchRenderTool();
+    const t = op === "search" ? AgentSearchTool({ mode: "paid" }) : op === "extract" ? AgentSearchExtractTool() : op === "search_and_read" ? AgentSearchSearchAndReadTool({ mode: "paid" }) : AgentSearchRenderTool();
     const arg = op === "search" ? { query: "qq", max_results: 3 } : op === "search_and_read" ? { query: "qq", num_results: 3 } : { url: "https://example.com", formats: ["markdown"] };
     const out = JSON.parse(await t.invoke(arg));
     assert.equal(seen.calls[0].url, `${API}/x402/v1/${op}`);
@@ -111,26 +111,35 @@ test("e2e against local mock direct API", { skip: !MOCK }, async () => {
 });
 
 test("search_and_read is direct-only", async () => {
+  process.env.AGENTSEARCH_MODE = "paid";
   process.env.AGENTSEARCH_PAYMENT_ROUTE = "pocket";
   globalThis.fetch = async () => { throw new Error("no network expected"); };
   assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "qq" }), /own x402 API/);
 });
 
 test("search_and_read with a $0.004 cap refuses and hints 20000", async () => {
+  process.env.AGENTSEARCH_MODE = "paid";
   process.env.AGENTSEARCH_MAX_PER_CALL_ATOMIC = "4000";
   const seen = mockApi("search_and_read");
   assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "qq" }), /to 20000/);
   assert.ok(seen.calls.every((c) => !c.sig));
 });
 
-test("search_and_read with no wallet does not hit the free relay", async () => {
+test("search_and_read with no wallet uses the free relay", async () => {
   delete process.env.AGENTSEARCH_WALLET_PRIVATE_KEY;
   delete process.env.POCKET_PRIVATE_KEY;
-  globalThis.fetch = async () => { throw new Error("no network expected"); };
-  assert.match(await AgentSearchSearchAndReadTool().invoke({ query: "qq" }), /No wallet is configured|needs a wallet/i);
+  const seen = [];
+  globalThis.fetch = async (url, init) => {
+    seen.push(String(url));
+    return new Response(JSON.stringify({ query: "qq", results: [] }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  const out = JSON.parse(await AgentSearchSearchAndReadTool().invoke({ query: "qq" }));
+  assert.ok(seen.some((u) => u.endsWith("/v1/search_and_read")), seen.join(","));
+  assert.deepEqual(out.results, []);
 });
 
 test("news signs $0.003 to /x402/v1/news with filters; max_results clamped to 10", async () => {
+  process.env.AGENTSEARCH_MODE = "paid";
   const seen = mockApi("news");
   const out = JSON.parse(await AgentSearchNewsTool().invoke({ query: "base x402", max_results: 50, freshness: "week", country: "us", include_domains: ["coindesk.com"], exclude_domains: [] }));
   assert.equal(seen.calls[0].url, `${API}/x402/v1/news`);
@@ -144,7 +153,7 @@ test("paid search and search_and_read forward filters; extract forwards max_char
   await AgentSearchTool({ mode: "paid" }).invoke({ query: "qq", language: "en", date_from: "2026-11-01" });
   assert.deepEqual(seen.calls[1].body, { query: "qq", language: "en", date_from: "2026-11-01" });
   resetSessionBudget(); seen = mockApi("search_and_read");
-  await AgentSearchSearchAndReadTool().invoke({ query: "qq", exclude_domains: ["pinterest.com"] });
+  await AgentSearchSearchAndReadTool({ mode: "paid" }).invoke({ query: "qq", exclude_domains: ["pinterest.com"] });
   assert.deepEqual(seen.calls[1].body.exclude_domains, ["pinterest.com"]);
   resetSessionBudget(); seen = mockApi("extract");
   const out = JSON.parse(await AgentSearchExtractTool().invoke({ url: "https://example.com", max_chars: 90000, include_links: true, formats: ["markdown"] }));
@@ -153,6 +162,7 @@ test("paid search and search_and_read forward filters; extract forwards max_char
 });
 
 test("screenshot signs $0.004, keeps base64 out of the model text and in the artifact", async () => {
+  process.env.AGENTSEARCH_MODE = "paid";
   const seen = { calls: [] };
   globalThis.fetch = async (url, init) => {
     const sig = new Headers(init.headers).get("payment-signature");
@@ -175,6 +185,7 @@ test("screenshot signs $0.004, keeps base64 out of the model text and in the art
 
 for (const T of [AgentSearchNewsTool, AgentSearchScreenshotTool]) {
   test(`${T.name} is direct-only`, async () => {
+    process.env.AGENTSEARCH_MODE = "paid";
     process.env.AGENTSEARCH_PAYMENT_ROUTE = "pocket";
     globalThis.fetch = async () => { throw new Error("no network expected"); };
     const r = T === AgentSearchNewsTool ? await T().invoke({ query: "qq" }) : (await T().invoke({ id: "c", name: "agentsearch_screenshot", type: "tool_call", args: { url: "https://example.com" } })).content;
