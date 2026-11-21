@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2 (2026-11-21)
+
+- News, Search + Read and Screenshot use the free relay by default (10 free calls per IP in total each). Paid x402 only when a wallet is set and AGENTSEARCH_MODE=paid (or mode: "paid").
+
 ## 0.6.1 (2026-11-20)
 - Free search wording: the free relay now allows **25 free searches per IP in total** (a lifetime allowance since 2026-11-19, not per day), then pay per call via x402 on Base ($0.003 per search at https://api.agentsearchhq.com; wallet setup https://agentsearchhq.com/wallet-setup). The search tool description, the free-limit (HTTP 429) message, `searchModeLabel()` and the README no longer say "25 searches/day per IP", "resets daily" or "daily limit". The extract/render free trial is unchanged (5 extract and 3 render calls per day per IP). No behavior change.
 
